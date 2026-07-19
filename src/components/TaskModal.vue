@@ -60,8 +60,8 @@ const openDatePicker = (e: Event) => {
 </script>
 
 <template>
-  <div v-if="show" class="modal-overlay" @click="emit('close')">
-    <div class="modal-content" @click.stop style="width: 400px;">
+  <div v-if="show" class="modal-overlay">
+    <div class="modal-content" style="width: 400px;">
       <div class="modal-header">
         <h2>{{ initialTask ? '修改任务' : '新建任务' }}</h2>
         <button class="close-btn" @click="emit('close')">
