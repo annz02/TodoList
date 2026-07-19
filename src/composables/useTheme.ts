@@ -8,8 +8,7 @@ export function useTheme() {
     '#3b82f6', // Blue
     '#10b981', // Emerald
     '#f59e0b', // Amber
-    '#ef4444', // Red
-    '#8b5cf6', // Violet
+    '#ec4899', // Pink
   ];
 
   const applyTheme = () => {
