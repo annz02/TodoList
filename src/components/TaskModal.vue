@@ -217,10 +217,15 @@ const handleSave = () => {
 }
 .modal-wrapper {
   background-color: var(--bg-sidebar);
-  width: 580px;
+  width: 90%;
+  max-width: 580px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
   border-radius: 16px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
   font-family: inherit;
+  overflow: hidden;
 }
 .modal-header-section {
   display: flex;
@@ -277,6 +282,8 @@ const handleSave = () => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-y: auto;
+  flex: 1;
 }
 
 .card {

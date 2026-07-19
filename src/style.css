@@ -477,7 +477,10 @@ body {
   background-color: var(--bg-main);
   padding: 2rem;
   border-radius: 16px;
-  width: 420px;
+  width: 90%;
+  max-width: 420px;
+  max-height: 90vh;
+  overflow-y: auto;
   box-shadow: 0 10px 30px rgba(0,0,0,0.2);
   border: 1px solid var(--border-color);
   transform: scale(0.95);
