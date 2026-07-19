@@ -95,14 +95,32 @@ onMounted(() => {
     }
     
     todos.value.forEach(task => {
-      if (!task.completed && task.notify && task.dueDate && !task.notified) {
+      if (!task.completed && task.notify && task.dueDate) {
         const dueTime = new Date(task.dueDate).getTime();
         const diffMinutes = (dueTime - now) / (1000 * 60);
         
-        // Notify if within 15 mins before due, up to 5 mins after due
-        if (diffMinutes <= 15 && diffMinutes > -5) {
-          const minsStr = Math.max(1, Math.round(diffMinutes));
-          const msg = `「${task.title}」还有不到 ${minsStr} 分钟就要到期啦！`;
+        let triggerMins = 15;
+        if (task.reminderOption === '30 分钟前') triggerMins = 30;
+        else if (task.reminderOption === '1 小时前') triggerMins = 60;
+        
+        let shouldNotify = false;
+        
+        // Initial notification
+        if (!task.notified && diffMinutes <= triggerMins && diffMinutes > -5) {
+          shouldNotify = true;
+        } 
+        // Repeating notification
+        else if (task.notified && task.repeatOption && task.repeatOption !== '不重复' && task.lastNotifiedTime) {
+          const repeatMins = task.repeatOption === '每十分钟' ? 10 : 5;
+          const minsSinceLastNotify = (now - task.lastNotifiedTime) / (1000 * 60);
+          if (minsSinceLastNotify >= repeatMins) {
+            shouldNotify = true;
+          }
+        }
+        
+        if (shouldNotify) {
+          const minsStr = Math.max(0, Math.round(diffMinutes));
+          const msg = diffMinutes <= 0 ? `「${task.title}」已经到期啦！` : `「${task.title}」还有不到 ${minsStr} 分钟就要到期啦！`;
           
           // 1. In-app Toast and Sound
           showToast(msg);
@@ -114,6 +132,7 @@ onMounted(() => {
           }
           
           task.notified = true;
+          task.lastNotifiedTime = now;
           hasUpdates = true;
         }
       }

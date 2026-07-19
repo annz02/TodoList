@@ -39,7 +39,8 @@ watch(() => props.show, (newVal) => {
     if (props.initialTask) {
       title.value = props.initialTask.title;
       dateTime.value = props.initialTask.dueDate ? props.initialTask.dueDate.substring(0, 16) : '';
-      reminder.value = props.initialTask.notify ? '15 分钟前' : '不提醒';
+      reminder.value = props.initialTask.reminderOption || (props.initialTask.notify ? '15 分钟前' : '不提醒');
+      repeat.value = props.initialTask.repeatOption || '不重复';
       priority.value = props.initialTask.priority || 0;
     } else {
       title.value = '';
@@ -77,7 +78,10 @@ const handleSave = () => {
     title: title.value.trim(),
     dueDate: dateTime.value,
     notify: reminder.value !== '不提醒',
-    priority: priority.value
+    priority: priority.value,
+    reminderOption: reminder.value,
+    repeatOption: repeat.value,
+    lastNotifiedTime: props.initialTask?.lastNotifiedTime
   });
 };
 </script>
