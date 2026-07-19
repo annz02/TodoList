@@ -3,11 +3,11 @@ import { ref, watch } from 'vue';
 
 const props = defineProps<{ 
   show: boolean;
-  initialTask?: { title: string; dueDate?: string; notify?: boolean; priority?: number } | null;
+  initialTask?: { title: string; dueDate?: string; notify?: boolean; priority?: number; reminderOption?: string; repeatOption?: string; lastNotifiedTime?: number | null } | null;
 }>();
 const emit = defineEmits<{ 
   (e: 'close'): void;
-  (e: 'save', taskData: { title: string; dueDate: string; notify: boolean; priority: number }): void;
+  (e: 'save', taskData: { title: string; dueDate: string; notify: boolean; priority: number; reminderOption: string; repeatOption: string; lastNotifiedTime?: number | null }): void;
 }>();
 
 const title = ref('');

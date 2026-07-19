@@ -167,7 +167,7 @@ const formatTimeText = (dateStr: string) => {
   return `${d.getMonth() + 1}月${d.getDate()}日 ${timePart}`;
 };
 
-const saveTask = (taskData: { title: string; dueDate: string; notify: boolean; priority?: number; reminderOption?: string; repeatOption?: string; lastNotifiedTime?: number }) => {
+const saveTask = (taskData: { title: string; dueDate: string; notify: boolean; priority: number; reminderOption: string; repeatOption: string; lastNotifiedTime?: number | null }) => {
   if (editingTask.value) {
     editingTask.value.title = taskData.title;
     editingTask.value.timeText = formatTimeText(taskData.dueDate);
@@ -176,7 +176,7 @@ const saveTask = (taskData: { title: string; dueDate: string; notify: boolean; p
     editingTask.value.priority = taskData.priority;
     editingTask.value.reminderOption = taskData.reminderOption;
     editingTask.value.repeatOption = taskData.repeatOption;
-    editingTask.value.lastNotifiedTime = taskData.lastNotifiedTime;
+    editingTask.value.lastNotifiedTime = taskData.lastNotifiedTime || undefined;
   } else {
     todos.value.unshift({
       id: Date.now().toString(),
