@@ -76,6 +76,14 @@ const deleteTask = (id: string) => {
   saveTodos();
 };
 
+const editTask = (task: Todo) => {
+  const newTitle = prompt('修改任务内容', task.title);
+  if (newTitle !== null && newTitle.trim() !== '') {
+    task.title = newTitle.trim();
+    saveTodos();
+  }
+};
+
 const filteredTodos = computed(() => {
   let result = todos.value;
   if (searchQuery.value) {
@@ -157,6 +165,7 @@ const handleAddTaskClick = () => {
           :task="task" 
           @toggle="toggleComplete" 
           @delete="deleteTask" 
+          @edit="editTask"
         />
       </TransitionGroup>
       

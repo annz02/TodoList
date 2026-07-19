@@ -311,16 +311,27 @@ body {
   font-family: monospace;
 }
 
-.task-right .actions {
-  cursor: pointer;
-  color: var(--text-muted);
-  padding: 4px;
-  border-radius: 4px;
+.task-right .actions-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.task-right .actions:hover {
-  background-color: #f1f5f9;
-  color: var(--danger-color);
+.task-right .action-btn {
+  cursor: pointer;
+  color: var(--primary-color);
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+}
+
+.task-right .action-btn:hover {
+  opacity: 1;
+  background-color: color-mix(in srgb, var(--primary-color) 15%, transparent);
 }
 
 .no-more {
@@ -385,7 +396,7 @@ body {
   background-color: #1e293b;
 }
 
-.dark .menu-item:hover, .dark .task-right .actions:hover {
+.dark .menu-item:hover, .dark .task-right .action-btn:hover {
   background-color: #334155;
 }
 
