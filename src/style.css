@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
 :root {
+  color-scheme: light;
   --bg-main: #ffffff;
   --bg-sidebar: #f8fafc;
   --border-color: #e2e8f0;
@@ -384,6 +385,7 @@ body {
 
 /* Dark Mode */
 .dark {
+  color-scheme: dark;
   --bg-main: #0f172a;
   --bg-sidebar: #1e293b;
   --border-color: #334155;
