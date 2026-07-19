@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Todo } from './types';
 import { useTheme } from './composables/useTheme';
 import { useToast } from './composables/useToast';
@@ -238,6 +239,10 @@ const handleAddTaskClick = () => {
   showTaskModal.value = true;
   activeCategory.value = 'today';
 };
+
+const minimizeWindow = () => getCurrentWindow().minimize();
+const toggleMaximize = () => getCurrentWindow().toggleMaximize();
+const closeWindow = () => getCurrentWindow().close();
 </script>
 
 <template>
@@ -253,8 +258,19 @@ const handleAddTaskClick = () => {
 
   <!-- Main Content -->
   <main class="main-content">
+    <div class="window-controls">
+      <button @click="minimizeWindow" class="win-btn" title="最小化">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      </button>
+      <button @click="toggleMaximize" class="win-btn" title="最大化">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect></svg>
+      </button>
+      <button @click="closeWindow" class="win-btn close-win-btn" title="关闭">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
     <header class="header">
-      <div class="header-left">
+      <div class="header-left" data-tauri-drag-region style="flex-grow: 1;">
         <h1>
           {{ activeCategory === 'today' ? '今天' : activeCategory === 'completed' ? '已完成' : activeCategory === 'my' ? '我的任务' : '全部任务' }}
         </h1>

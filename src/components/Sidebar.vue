@@ -19,8 +19,8 @@ const { themeMode, setThemeMode } = useTheme();
 
 <template>
   <aside class="sidebar">
-    <div class="logo-area">
-      <div style="display: flex; align-items: center;">
+    <div class="logo-area" data-tauri-drag-region>
+      <div style="display: flex; align-items: center; pointer-events: none;">
         <img src="/logo.png" alt="Logo" style="width: 32px; height: 32px; margin-right: 12px; border-radius: 6px; object-fit: contain;" />
         <span style="font-size: 1.25rem;">Todolist</span>
       </div>

@@ -143,7 +143,7 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 2.5rem 3rem;
+  padding: 4rem 3rem 2.5rem 3rem;
   background-color: var(--bg-main);
 }
 
@@ -172,6 +172,40 @@ body {
   display: flex;
   align-items: center;
   gap: 1rem;
+}
+
+.window-controls {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 9999;
+}
+
+.win-btn {
+  background: transparent;
+  border: none;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.win-btn:hover {
+  background-color: var(--border-color);
+  color: var(--text-main);
+}
+
+.close-win-btn:hover {
+  background-color: var(--danger-color);
+  color: white;
 }
 
 .search-box {
