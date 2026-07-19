@@ -45,6 +45,18 @@ const handleSave = () => {
     notify: notify.value
   });
 };
+
+const openDatePicker = (e: Event) => {
+  e.preventDefault();
+  const target = e.target as HTMLInputElement;
+  if (target && typeof target.showPicker === 'function') {
+    try {
+      target.showPicker();
+    } catch (err) {
+      // ignore
+    }
+  }
+};
 </script>
 
 <template>
@@ -65,7 +77,7 @@ const handleSave = () => {
 
       <div class="setting-group" style="display: flex; flex-direction: column; gap: 8px;">
         <label>任务完成时间</label>
-        <input type="datetime-local" v-model="dueDate" class="form-input" />
+        <input type="datetime-local" v-model="dueDate" class="form-input" @mousedown="openDatePicker" @keydown.enter="openDatePicker" @click.prevent />
       </div>
 
       <div class="setting-group" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none;" @click="notify = !notify">
