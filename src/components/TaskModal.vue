@@ -14,6 +14,7 @@ const title = ref('');
 const dueDate = ref('');
 const titleError = ref('');
 const notify = ref(false);
+const isDateFocused = ref(false);
 
 watch(() => props.show, (newVal) => {
   if (newVal) {
@@ -24,11 +25,7 @@ watch(() => props.show, (newVal) => {
       notify.value = props.initialTask.notify || false;
     } else {
       title.value = '';
-      const now = new Date();
-      // Default to next hour, format as YYYY-MM-DDTHH:mm
-      now.setHours(now.getHours() + 1, 0, 0, 0);
-      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-      dueDate.value = now.toISOString().slice(0, 16);
+      dueDate.value = '';
       notify.value = false;
     }
   }
@@ -49,6 +46,10 @@ const handleSave = () => {
 const openDatePicker = (e: Event) => {
   e.preventDefault();
   const target = e.target as HTMLInputElement;
+  isDateFocused.value = true;
+  if (target.type !== 'datetime-local') {
+    target.type = 'datetime-local';
+  }
   if (target && typeof target.showPicker === 'function') {
     try {
       target.showPicker();
@@ -77,7 +78,7 @@ const openDatePicker = (e: Event) => {
 
       <div class="setting-group" style="display: flex; flex-direction: column; gap: 8px;">
         <label>任务完成时间</label>
-        <input type="datetime-local" v-model="dueDate" class="form-input" @mousedown="openDatePicker" @keydown.enter="openDatePicker" @click.prevent />
+        <input :type="(dueDate || isDateFocused) ? 'datetime-local' : 'text'" v-model="dueDate" class="form-input" placeholder="请选择时间" @focus="isDateFocused = true" @blur="isDateFocused = false" @mousedown="openDatePicker" @keydown.enter="openDatePicker" @click.prevent />
       </div>
 
       <div class="setting-group" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none;" @click="notify = !notify">
