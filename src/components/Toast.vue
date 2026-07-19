@@ -44,7 +44,7 @@ const { toasts, removeToast } = useToast();
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
   border-radius: 12px;
   padding: 16px;
-  width: 320px;
+  width: 400px;
   display: flex;
   align-items: flex-start;
   gap: 12px;
