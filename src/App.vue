@@ -1,16 +1,20 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { Todo } from './types';
 import { useTheme } from './composables/useTheme';
+import { useToast } from './composables/useToast';
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 
 // Import components
 import Sidebar from './components/Sidebar.vue';
 import SettingsModal from './components/SettingsModal.vue';
 import TaskItem from './components/TaskItem.vue';
 import TaskModal from './components/TaskModal.vue';
+import Toast from './components/Toast.vue';
 
 const { applyTheme } = useTheme();
+const { showToast } = useToast();
 
 const todos = ref<Todo[]>([]);
 const showTaskModal = ref(false);
@@ -18,6 +22,7 @@ const editingTask = ref<Todo | null>(null);
 const searchQuery = ref('');
 const activeCategory = ref('today');
 const showSettingsModal = ref(false);
+let checkInterval: number;
 
 // Load from Rust backend
 const loadTodos = async () => {
@@ -49,6 +54,51 @@ const saveTodos = async () => {
 onMounted(() => {
   loadTodos();
   applyTheme();
+
+  // Notification checker: run every minute
+  checkInterval = window.setInterval(async () => {
+    const now = new Date().getTime();
+    let hasUpdates = false;
+    
+    // Check system notification permission
+    let permissionGranted = await isPermissionGranted();
+    if (!permissionGranted) {
+      const permission = await requestPermission();
+      permissionGranted = permission === 'granted';
+    }
+    
+    todos.value.forEach(task => {
+      if (!task.completed && task.notify && task.dueDate && !task.notified) {
+        const dueTime = new Date(task.dueDate).getTime();
+        const diffMinutes = (dueTime - now) / (1000 * 60);
+        
+        // Notify if within 15 mins before due, up to 5 mins after due
+        if (diffMinutes <= 15 && diffMinutes > -5) {
+          const minsStr = Math.max(1, Math.round(diffMinutes));
+          const msg = `「${task.title}」还有不到 ${minsStr} 分钟就要到期啦！`;
+          
+          // 1. In-app Toast
+          showToast(msg);
+          
+          // 2. System Desktop Notification
+          if (permissionGranted) {
+            sendNotification({ title: 'Todolist 任务临期提醒', body: msg });
+          }
+          
+          task.notified = true;
+          hasUpdates = true;
+        }
+      }
+    });
+    
+    if (hasUpdates) {
+      saveTodos();
+    }
+  }, 60000);
+});
+
+onUnmounted(() => {
+  if (checkInterval) clearInterval(checkInterval);
 });
 
 const formatTimeText = (dateStr: string) => {
@@ -188,4 +238,5 @@ const handleAddTaskClick = () => {
 
   <TaskModal :show="showTaskModal" :initialTask="editingTask" @close="showTaskModal = false; editingTask = null;" @save="saveTask" />
   <SettingsModal :show="showSettingsModal" @close="showSettingsModal = false" />
+  <Toast />
 </template>

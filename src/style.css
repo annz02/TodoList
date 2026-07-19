@@ -310,7 +310,13 @@ body {
 }
 
 .task-right .time {
-  font-family: monospace;
+  font-family: inherit;
+  font-weight: 500;
+  font-size: 0.85rem;
+  background-color: var(--bg-sidebar);
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
 }
 
 .task-right .actions-group {

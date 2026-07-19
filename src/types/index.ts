@@ -5,4 +5,5 @@ export interface Todo {
   timeText: string;
   dueDate?: string;
   notify?: boolean;
+  notified?: boolean;
 }
