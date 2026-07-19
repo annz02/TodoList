@@ -1,8 +1,9 @@
 import { ref } from 'vue';
 
+const themeMode = ref(localStorage.getItem('themeMode') || 'light');
+const primaryColor = ref(localStorage.getItem('primaryColor') || '#3b82f6');
+
 export function useTheme() {
-  const themeMode = ref(localStorage.getItem('themeMode') || 'light');
-  const primaryColor = ref(localStorage.getItem('primaryColor') || '#3b82f6');
 
   const themeColors = [
     '#3b82f6', // Blue

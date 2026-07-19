@@ -3,188 +3,480 @@ import { ref, watch } from 'vue';
 
 const props = defineProps<{ 
   show: boolean;
-  initialTask?: { title: string; dueDate?: string; notify?: boolean } | null;
+  initialTask?: { title: string; dueDate?: string; notify?: boolean; priority?: number } | null;
 }>();
 const emit = defineEmits<{ 
   (e: 'close'): void;
-  (e: 'save', taskData: { title: string; dueDate: string; notify: boolean }): void;
+  (e: 'save', taskData: { title: string; dueDate: string; notify: boolean; priority: number }): void;
 }>();
 
 const title = ref('');
-const dueDate = ref('');
 const titleError = ref('');
-const notify = ref(false);
-const isDateFocused = ref(false);
+const dateTime = ref('');
+const priority = ref(0);
+const priorityLabels = ['低', '较低', '中', '较高', '高'];
+
+const reminder = ref('15 分钟前');
+const repeat = ref('不重复');
 
 watch(() => props.show, (newVal) => {
   if (newVal) {
     titleError.value = '';
     if (props.initialTask) {
       title.value = props.initialTask.title;
-      dueDate.value = props.initialTask.dueDate || '';
-      notify.value = props.initialTask.notify || false;
+      dateTime.value = props.initialTask.dueDate ? props.initialTask.dueDate.substring(0, 16) : '';
+      reminder.value = props.initialTask.notify ? '15 分钟前' : '不提醒';
+      priority.value = props.initialTask.priority || 0;
     } else {
       title.value = '';
-      dueDate.value = '';
-      notify.value = false;
+      dateTime.value = '';
+      reminder.value = '15 分钟前';
+      priority.value = 0;
     }
   }
 });
+
+const dateInputRef = ref<HTMLInputElement | null>(null);
+
+const triggerDatePicker = () => {
+  if (dateInputRef.value && typeof dateInputRef.value.showPicker === 'function') {
+    try {
+      dateInputRef.value.showPicker();
+    } catch (e) {}
+  }
+};
 
 const handleSave = () => {
   if (!title.value.trim()) {
     titleError.value = '请输入任务名称';
     return;
   }
+  
   emit('save', {
     title: title.value.trim(),
-    dueDate: dueDate.value,
-    notify: notify.value
+    dueDate: dateTime.value,
+    notify: reminder.value !== '不提醒',
+    priority: priority.value
   });
-};
-
-const openDatePicker = (e: Event) => {
-  e.preventDefault();
-  const target = e.target as HTMLInputElement;
-  isDateFocused.value = true;
-  if (target.type !== 'datetime-local') {
-    target.type = 'datetime-local';
-  }
-  if (target && typeof target.showPicker === 'function') {
-    try {
-      target.showPicker();
-    } catch (err) {
-      // ignore
-    }
-  }
 };
 </script>
 
 <template>
   <div v-if="show" class="modal-overlay">
-    <div class="modal-content" style="width: 400px;">
-      <div class="modal-header">
-        <h2>{{ initialTask ? '修改任务' : '新建任务' }}</h2>
+    <div class="modal-wrapper">
+      
+      <!-- Header -->
+      <div class="modal-header-section">
+        <div class="header-left">
+          <div class="header-icon-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+          </div>
+          <div class="header-titles">
+            <h2>{{ initialTask ? '修改任务' : '新建任务' }}</h2>
+            <p>创建一个新任务，规划你的待办事项</p>
+          </div>
+        </div>
         <button class="close-btn" @click="emit('close')">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       </div>
 
-      <div class="setting-group" style="display: flex; flex-direction: column; gap: 8px;">
-        <label>任务名称</label>
-        <input type="text" v-model="title" class="form-input" :class="{ 'has-error': titleError }" placeholder="请输入任务名称" autofocus @keyup.enter="handleSave" @input="titleError = ''" />
-        <span v-if="titleError" class="error-msg">{{ titleError }}</span>
-      </div>
+      <div class="modal-body">
+        <!-- Title Card -->
+        <div class="card title-card">
+          <label class="card-label">任务名称 <span class="required">*</span></label>
+          <div class="input-container" :class="{ 'has-error': titleError }">
+            <input type="text" v-model="title" maxlength="100" placeholder="请输入任务名称" autofocus @keyup.enter="handleSave" @input="titleError = ''" />
+            <span class="char-count">{{ title.length }}/100</span>
+          </div>
+          <span v-if="titleError" class="error-msg">{{ titleError }}</span>
+        </div>
 
-      <div class="setting-group" style="display: flex; flex-direction: column; gap: 8px;">
-        <label>任务完成时间</label>
-        <input :type="(dueDate || isDateFocused) ? 'datetime-local' : 'text'" v-model="dueDate" class="form-input" placeholder="请选择时间" @focus="isDateFocused = true" @blur="isDateFocused = false" @mousedown="openDatePicker" @keydown.enter="openDatePicker" @click.prevent />
-      </div>
+        <!-- Date & Priority Row -->
+        <div class="row-cards">
+          <!-- Date Card -->
+          <div class="card half-card">
+            <div class="card-title">
+              <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              <span>截止时间</span>
+            </div>
+            <div class="date-picker-box" @click="triggerDatePicker" style="cursor: pointer; padding-left: 12px; position: relative; display: flex; align-items: center;">
+              <svg class="small-icon" style="margin-right: 8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              <span class="date-text" :class="{ 'has-value': dateTime }">
+                {{ dateTime ? dateTime.replace('T', ' ') : '选择日期和时间' }}
+              </span>
+              <input type="datetime-local" ref="dateInputRef" v-model="dateTime" class="overlay-input" style="pointer-events: none;" />
+            </div>
+          </div>
+          
+          <!-- Priority Card -->
+          <div class="card half-card">
+            <div class="card-title">
+              <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+              <span>优先级</span>
+            </div>
+            <div class="stars-row">
+              <div class="star-item" v-for="i in 5" :key="i" @click="priority = i">
+                <svg class="star-svg" :class="{ active: i <= priority }" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                <span class="star-label" :class="{ active: i === priority }">{{ priorityLabels[i-1] }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
-      <div class="setting-group" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none;" @click="notify = !notify">
-        <label style="margin-bottom: 0; cursor: pointer;">是否开启通知</label>
-        <div class="toggle-switch" :class="{ active: notify }">
-          <div class="toggle-knob"></div>
+        <!-- Reminder Card -->
+        <div class="card row-card">
+          <div class="card-title">
+            <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+            <span>提醒</span>
+          </div>
+          <div class="select-wrapper">
+            <select v-model="reminder" class="custom-select">
+              <option>15 分钟前</option>
+              <option>30 分钟前</option>
+              <option>不提醒</option>
+            </select>
+            <svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+        </div>
+
+        <!-- Repeat Card -->
+        <div class="card row-card">
+          <div class="card-title">
+            <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            <span>重复</span>
+          </div>
+          <div class="select-wrapper">
+            <select v-model="repeat" class="custom-select">
+              <option>不重复</option>
+              <option>每天</option>
+              <option>每周</option>
+            </select>
+            <svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
         </div>
       </div>
 
-      <div style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 12px;">
-        <button class="cancel-btn" @click="emit('close')">取消</button>
-        <button class="save-btn" @click="handleSave">{{ initialTask ? '保存修改' : '确认新建' }}</button>
+      <!-- Footer -->
+      <div class="modal-footer">
+        <button class="btn-cancel" @click="emit('close')">取消</button>
+        <button class="btn-confirm" @click="handleSave">{{ initialTask ? '保存修改' : '确认新建' }}</button>
       </div>
+      
     </div>
   </div>
 </template>
 
 <style scoped>
-.error-msg {
-  color: #ef4444;
-  font-size: 0.85rem;
-  margin-top: -4px;
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
 }
-.form-input.has-error {
-  border-color: #ef4444;
-}
-.form-input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 0.95rem;
-  outline: none;
-  transition: border-color 0.2s;
-  background-color: var(--bg-main);
-  color: var(--text-main);
+.modal-wrapper {
+  background-color: var(--bg-sidebar);
+  width: 580px;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
   font-family: inherit;
 }
-.form-input:focus {
-  border-color: var(--primary-color);
+.modal-header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 24px 32px 16px;
 }
-/* Style the native calendar icon */
-input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-  cursor: pointer;
-  background-image: none !important; /* Remove the native browser icon completely */
-  color: transparent;
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.header-icon-box {
   background-color: var(--primary-color);
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'%3E%3C/rect%3E%3Cline x1='16' y1='2' x2='16' y2='6'%3E%3C/line%3E%3Cline x1='8' y1='2' x2='8' y2='6'%3E%3C/line%3E%3Cline x1='3' y1='10' x2='21' y2='10'%3E%3C/line%3E%3C/svg%3E") center/contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'%3E%3C/rect%3E%3Cline x1='16' y1='2' x2='16' y2='6'%3E%3C/line%3E%3Cline x1='8' y1='2' x2='8' y2='6'%3E%3C/line%3E%3Cline x1='3' y1='10' x2='21' y2='10'%3E%3C/line%3E%3C/svg%3E") center/contain no-repeat;
+  color: #fff;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.header-titles h2 {
+  margin: 0 0 4px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.header-titles p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.close-btn {
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.close-btn:hover {
+  background: var(--bg-sidebar);
+  color: var(--text-main);
+}
+
+.modal-body {
+  padding: 0 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  background: var(--bg-main);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.card-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 12px;
+}
+.card-label .required {
+  color: var(--danger-color);
+}
+
+.input-container {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0 16px;
+  height: 48px;
+  background: var(--bg-main);
+  transition: all 0.2s;
+}
+.input-container:focus-within {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+.input-container.has-error {
+  border-color: var(--danger-color);
+}
+.input-container input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: var(--text-main);
+  background: transparent;
+}
+.input-container input::placeholder {
+  color: var(--text-muted);
+}
+.char-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: 12px;
+}
+.error-msg {
+  display: block;
+  color: var(--danger-color);
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.row-cards {
+  display: flex;
+  gap: 16px;
+}
+.half-card {
+  flex: 1;
+}
+
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.green-icon {
   width: 18px;
   height: 18px;
-  padding: 2px;
-  transition: background-color 0.2s;
+  color: var(--primary-color);
 }
-input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
-  background-color: var(--primary-hover);
-}
-.toggle-switch {
-  width: 44px;
-  height: 24px;
-  background-color: #cbd5e1;
-  border-radius: 12px;
-  position: relative;
-  transition: background-color 0.2s;
-}
-.toggle-switch.active {
-  background-color: var(--primary-color);
-}
-.toggle-knob {
-  width: 20px;
-  height: 20px;
-  background-color: white;
-  border-radius: 50%;
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  transition: transform 0.2s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-}
-.toggle-switch.active .toggle-knob {
-  transform: translateX(20px);
-}
-.cancel-btn {
-  padding: 8px 16px;
+
+.date-picker-box {
+  display: flex;
+  align-items: center;
   border: 1px solid var(--border-color);
-  background: transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  color: var(--text-secondary);
-  transition: background-color 0.2s;
+  border-radius: 8px;
+  height: 44px;
+  transition: all 0.2s;
 }
-.cancel-btn:hover {
+.date-picker-box:focus-within {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+.date-text {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.date-text.has-value {
+  color: var(--text-main);
+}
+.small-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+}
+.overlay-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+
+.stars-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 8px;
+}
+.star-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.star-svg {
+  width: 22px;
+  height: 22px;
+  fill: var(--border-color);
+  transition: all 0.2s;
+}
+.star-svg.active {
+  fill: #f59e0b; /* keeping stars orange/gold */
+}
+.star-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+.star-label.active {
+  color: var(--primary-color);
+}
+
+.row-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+}
+.row-card .card-title {
+  margin: 0;
+}
+.select-wrapper {
+  position: relative;
+  width: 140px;
+}
+.custom-select {
+  appearance: none;
+  width: 100%;
+  padding: 8px 32px 8px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-main);
+  font-size: 14px;
+  color: var(--text-main);
+  outline: none;
+  cursor: pointer;
+}
+.select-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.modal-footer {
+  padding: 24px 32px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.btn-cancel, .btn-confirm {
+  padding: 0 24px;
+  height: 40px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-cancel {
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+.btn-cancel:hover {
+  background: var(--bg-sidebar);
+}
+.btn-confirm {
+  background: var(--primary-color);
+  border: none;
+  color: #fff;
+}
+.btn-confirm:hover {
+  background: var(--primary-hover);
+}
+
+/* Dark Mode Overrides for proper contrast */
+:global(.dark) .modal-wrapper {
+  background-color: var(--bg-main);
+}
+:global(.dark) .card {
   background-color: var(--bg-sidebar);
 }
-.save-btn {
-  padding: 8px 20px;
-  background-color: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background-color 0.2s;
+:global(.dark) .input-container,
+:global(.dark) .custom-select {
+  background-color: var(--bg-main);
 }
-.save-btn:hover {
-  background-color: var(--primary-hover);
+:global(.dark) .close-btn,
+:global(.dark) .btn-cancel {
+  background-color: var(--bg-main);
+}
+:global(.dark) .close-btn:hover,
+:global(.dark) .btn-cancel:hover {
+  background-color: var(--border-color);
 }
 </style>
