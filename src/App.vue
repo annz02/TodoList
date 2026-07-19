@@ -8,12 +8,13 @@ import { useTheme } from './composables/useTheme';
 import Sidebar from './components/Sidebar.vue';
 import SettingsModal from './components/SettingsModal.vue';
 import TaskItem from './components/TaskItem.vue';
+import TaskModal from './components/TaskModal.vue';
 
 const { applyTheme } = useTheme();
 
 const todos = ref<Todo[]>([]);
-const newTaskTitle = ref('');
-const showAddInput = ref(false);
+const showTaskModal = ref(false);
+const editingTask = ref<Todo | null>(null);
 const searchQuery = ref('');
 const activeCategory = ref('today');
 const showSettingsModal = ref(false);
@@ -50,19 +51,42 @@ onMounted(() => {
   applyTheme();
 });
 
-const addTask = () => {
-  if (newTaskTitle.value.trim() === '') {
-    showAddInput.value = false;
-    return;
+const formatTimeText = (dateStr: string) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const now = new Date();
+  
+  const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const isTomorrow = d.getDate() === tomorrow.getDate() && d.getMonth() === tomorrow.getMonth() && d.getFullYear() === tomorrow.getFullYear();
+  
+  const timePart = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  
+  if (isToday) return timePart;
+  if (isTomorrow) return `明天 ${timePart}`;
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${timePart}`;
+};
+
+const saveTask = (taskData: { title: string; dueDate: string; notify: boolean }) => {
+  if (editingTask.value) {
+    editingTask.value.title = taskData.title;
+    editingTask.value.timeText = formatTimeText(taskData.dueDate);
+    editingTask.value.dueDate = taskData.dueDate;
+    editingTask.value.notify = taskData.notify;
+  } else {
+    todos.value.unshift({
+      id: Date.now().toString(),
+      title: taskData.title,
+      completed: false,
+      timeText: formatTimeText(taskData.dueDate),
+      dueDate: taskData.dueDate,
+      notify: taskData.notify
+    });
   }
-  todos.value.unshift({
-    id: Date.now().toString(),
-    title: newTaskTitle.value,
-    completed: false,
-    timeText: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-  });
-  newTaskTitle.value = '';
-  showAddInput.value = false;
+  showTaskModal.value = false;
+  editingTask.value = null;
   saveTodos();
 };
 
@@ -77,11 +101,8 @@ const deleteTask = (id: string) => {
 };
 
 const editTask = (task: Todo) => {
-  const newTitle = prompt('修改任务内容', task.title);
-  if (newTitle !== null && newTitle.trim() !== '') {
-    task.title = newTitle.trim();
-    saveTodos();
-  }
+  editingTask.value = task;
+  showTaskModal.value = true;
 };
 
 const filteredTodos = computed(() => {
@@ -109,7 +130,8 @@ const allCount = computed(() => todos.value.length);
 const currentDate = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
 
 const handleAddTaskClick = () => {
-  showAddInput.value = true;
+  editingTask.value = null;
+  showTaskModal.value = true;
   activeCategory.value = 'today';
 };
 </script>
@@ -139,23 +161,12 @@ const handleAddTaskClick = () => {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" placeholder="搜索任务..." v-model="searchQuery">
         </div>
-        <button class="new-task-btn" @click="showAddInput = true">
+        <button class="new-task-btn" @click="showTaskModal = true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           新建任务
         </button>
       </div>
     </header>
-
-    <input 
-      v-if="showAddInput" 
-      type="text" 
-      v-model="newTaskTitle" 
-      class="add-task-input" 
-      placeholder="输入任务标题并回车..." 
-      @keyup.enter="addTask" 
-      @blur="addTask" 
-      autofocus
-    >
 
     <div class="task-list">
       <TransitionGroup name="list">
@@ -169,11 +180,12 @@ const handleAddTaskClick = () => {
         />
       </TransitionGroup>
       
-      <div v-if="filteredTodos.length === 0 && !showAddInput" class="no-more">
+      <div v-if="filteredTodos.length === 0 && !showTaskModal" class="no-more">
         没有更多任务了
       </div>
     </div>
   </main>
 
+  <TaskModal :show="showTaskModal" :initialTask="editingTask" @close="showTaskModal = false; editingTask = null;" @save="saveTask" />
   <SettingsModal :show="showSettingsModal" @close="showSettingsModal = false" />
 </template>
