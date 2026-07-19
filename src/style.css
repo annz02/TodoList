@@ -257,7 +257,8 @@ body {
 
 .task-item:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  border-color: #cbd5e1;
+  border-color: var(--primary-color);
+  background-color: var(--primary-light);
 }
 
 .task-left {
@@ -396,6 +397,9 @@ body {
 
 .dark .task-item {
   background-color: #1e293b;
+}
+.dark .task-item:hover {
+  background-color: var(--primary-light);
 }
 
 .dark .menu-item:hover, .dark .task-right .action-btn:hover {
@@ -538,4 +542,31 @@ body {
 /* Global Transitions for smooth theme switching */
 body, .sidebar, .main-content, .task-item, .modal-content, input, .menu-item {
   transition: background-color 0.3s, border-color 0.3s, color 0.3s, box-shadow 0.3s;
+}
+
+/* Global Toggle Switch */
+.toggle-switch {
+  width: 44px;
+  height: 24px;
+  background-color: #cbd5e1;
+  border-radius: 12px;
+  position: relative;
+  transition: background-color 0.2s;
+}
+.toggle-switch.active {
+  background-color: var(--primary-color);
+}
+.toggle-knob {
+  width: 20px;
+  height: 20px;
+  background-color: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.toggle-switch.active .toggle-knob {
+  transform: translateX(20px);
 }
