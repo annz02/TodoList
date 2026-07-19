@@ -12,10 +12,12 @@ const emit = defineEmits<{
 
 const title = ref('');
 const dueDate = ref('');
+const titleError = ref('');
 const notify = ref(false);
 
 watch(() => props.show, (newVal) => {
   if (newVal) {
+    titleError.value = '';
     if (props.initialTask) {
       title.value = props.initialTask.title;
       dueDate.value = props.initialTask.dueDate || '';
@@ -34,7 +36,7 @@ watch(() => props.show, (newVal) => {
 
 const handleSave = () => {
   if (!title.value.trim()) {
-    alert('请输入任务名称');
+    titleError.value = '请输入任务名称';
     return;
   }
   emit('save', {
@@ -57,7 +59,8 @@ const handleSave = () => {
 
       <div class="setting-group" style="display: flex; flex-direction: column; gap: 8px;">
         <label>任务名称</label>
-        <input type="text" v-model="title" class="form-input" placeholder="请输入任务名称" autofocus @keyup.enter="handleSave" />
+        <input type="text" v-model="title" class="form-input" :class="{ 'has-error': titleError }" placeholder="请输入任务名称" autofocus @keyup.enter="handleSave" @input="titleError = ''" />
+        <span v-if="titleError" class="error-msg">{{ titleError }}</span>
       </div>
 
       <div class="setting-group" style="display: flex; flex-direction: column; gap: 8px;">
@@ -81,6 +84,14 @@ const handleSave = () => {
 </template>
 
 <style scoped>
+.error-msg {
+  color: #ef4444;
+  font-size: 0.85rem;
+  margin-top: -4px;
+}
+.form-input.has-error {
+  border-color: #ef4444;
+}
 .form-input {
   width: 100%;
   padding: 10px 12px;
