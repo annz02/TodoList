@@ -12,6 +12,7 @@ const emit = defineEmits<{
 
 const title = ref('');
 const titleError = ref('');
+const dateTimeError = ref('');
 const dateTime = ref('');
 const priority = ref(0);
 const priorityLabels = ['低', '较低', '中', '较高', '高'];
@@ -34,6 +35,7 @@ watch(reminder, (newVal) => {
 watch(() => props.show, (newVal) => {
   if (newVal) {
     titleError.value = '';
+    dateTimeError.value = '';
     if (props.initialTask) {
       title.value = props.initialTask.title;
       dateTime.value = props.initialTask.dueDate ? props.initialTask.dueDate.substring(0, 16) : '';
@@ -59,10 +61,17 @@ const triggerDatePicker = () => {
 };
 
 const handleSave = () => {
+  let hasError = false;
   if (!title.value.trim()) {
     titleError.value = '请输入任务名称';
-    return;
+    hasError = true;
   }
+  if (!dateTime.value) {
+    dateTimeError.value = '请选择截止时间';
+    hasError = true;
+  }
+  
+  if (hasError) return;
   
   emit('save', {
     title: title.value.trim(),
@@ -113,15 +122,16 @@ const handleSave = () => {
           <div class="card half-card">
             <div class="card-title">
               <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-              <span>截止时间</span>
+              <span>截止时间 <span class="required">*</span></span>
             </div>
-            <div class="date-picker-box" @click="triggerDatePicker" style="cursor: pointer; padding-left: 12px; position: relative; display: flex; align-items: center;">
+            <div class="date-picker-box" :class="{ 'has-error': dateTimeError }" @click="triggerDatePicker" style="cursor: pointer; padding-left: 12px; position: relative; display: flex; align-items: center;">
               <svg class="small-icon" style="margin-right: 8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
               <span class="date-text" :class="{ 'has-value': dateTime }">
                 {{ dateTime ? dateTime.replace('T', ' ') : '选择日期和时间' }}
               </span>
-              <input type="datetime-local" ref="dateInputRef" v-model="dateTime" class="overlay-input" style="pointer-events: none;" />
+              <input type="datetime-local" ref="dateInputRef" v-model="dateTime" @input="dateTimeError = ''" class="overlay-input" style="pointer-events: none;" />
             </div>
+            <span v-if="dateTimeError" class="error-msg">{{ dateTimeError }}</span>
           </div>
           
           <!-- Priority Card -->
@@ -351,6 +361,9 @@ const handleSave = () => {
 .date-picker-box:focus-within {
   border-color: var(--primary-color);
   box-shadow: 0 0 0 2px var(--primary-light);
+}
+.date-picker-box.has-error {
+  border-color: var(--danger-color);
 }
 .date-text {
   font-size: 13px;
