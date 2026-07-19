@@ -112,12 +112,14 @@ body {
   font-size: 0.75rem;
   background-color: transparent;
   color: inherit;
+  padding: 2px 8px;
+  border-radius: 12px;
+  min-width: 24px;
+  text-align: center;
 }
 
 .menu-item.active .badge {
-  background-color: #dbeafe;
-  padding: 2px 8px;
-  border-radius: 12px;
+  background-color: color-mix(in srgb, var(--primary-color) 25%, transparent);
 }
 
 .settings {
