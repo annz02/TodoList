@@ -151,6 +151,8 @@ body {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 .header-left h1 {
@@ -162,6 +164,7 @@ body {
 .header-left .date {
   color: var(--text-muted);
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .header-right {
@@ -181,7 +184,9 @@ body {
   outline: none;
   font-size: 0.9rem;
   transition: border-color 0.2s;
-  width: 200px;
+  width: 100%;
+  max-width: 200px;
+  min-width: 120px;
 }
 
 .search-box input:focus {
@@ -208,6 +213,8 @@ body {
   align-items: center;
   gap: 6px;
   transition: background-color 0.2s, transform 0.1s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .new-task-btn:hover {
