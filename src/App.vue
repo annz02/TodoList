@@ -51,6 +51,33 @@ const saveTodos = async () => {
   }
 };
 
+const playBeep = () => {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      
+      const startTime = ctx.currentTime + i * 0.12;
+      
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.1, startTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4);
+      
+      osc.start(startTime);
+      osc.stop(startTime + 0.4);
+    });
+  } catch (e) {
+    console.warn('Audio play failed', e);
+  }
+};
+
 onMounted(() => {
   loadTodos();
   applyTheme();
@@ -77,12 +104,13 @@ onMounted(() => {
           const minsStr = Math.max(1, Math.round(diffMinutes));
           const msg = `「${task.title}」还有不到 ${minsStr} 分钟就要到期啦！`;
           
-          // 1. In-app Toast
+          // 1. In-app Toast and Sound
           showToast(msg);
+          playBeep();
           
           // 2. System Desktop Notification
           if (permissionGranted) {
-            sendNotification({ title: 'Todolist 任务临期提醒', body: msg });
+            sendNotification({ title: 'Todolist 任务临期提醒', body: msg, sound: 'default' });
           }
           
           task.notified = true;
