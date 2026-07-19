@@ -19,6 +19,18 @@ const priorityLabels = ['低', '较低', '中', '较高', '高'];
 const reminder = ref('15 分钟前');
 const repeat = ref('不重复');
 
+const reminderOpen = ref(false);
+const repeatOpen = ref(false);
+const reminderOptions = ['15 分钟前', '30 分钟前', '1 小时前', '不提醒'];
+const repeatOptions = ['不重复', '每五分钟', '每十分钟'];
+
+watch(reminder, (newVal) => {
+  if (newVal === '不提醒') {
+    repeat.value = '不重复';
+    repeatOpen.value = false;
+  }
+});
+
 watch(() => props.show, (newVal) => {
   if (newVal) {
     titleError.value = '';
@@ -84,7 +96,10 @@ const handleSave = () => {
       <div class="modal-body">
         <!-- Title Card -->
         <div class="card title-card">
-          <label class="card-label">任务名称 <span class="required">*</span></label>
+          <div class="card-title">
+            <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            <span>任务名称 <span class="required">*</span></span>
+          </div>
           <div class="input-container" :class="{ 'has-error': titleError }">
             <input type="text" v-model="title" maxlength="100" placeholder="请输入任务名称" autofocus @keyup.enter="handleSave" @input="titleError = ''" />
             <span class="char-count">{{ title.length }}/100</span>
@@ -130,29 +145,35 @@ const handleSave = () => {
             <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
             <span>提醒</span>
           </div>
-          <div class="select-wrapper">
-            <select v-model="reminder" class="custom-select">
-              <option>15 分钟前</option>
-              <option>30 分钟前</option>
-              <option>不提醒</option>
-            </select>
-            <svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          <div class="custom-dropdown" tabindex="0" @blur="reminderOpen = false">
+            <div class="dropdown-selected" @click="reminderOpen = !reminderOpen">
+              <span>{{ reminder }}</span>
+              <svg class="select-arrow" :class="{ open: reminderOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+            <div class="dropdown-menu" v-show="reminderOpen">
+              <div class="dropdown-item" v-for="opt in reminderOptions" :key="opt" @click="reminder = opt; reminderOpen = false" :class="{ selected: reminder === opt }">
+                {{ opt }}
+              </div>
+            </div>
           </div>
         </div>
 
         <!-- Repeat Card -->
-        <div class="card row-card">
+        <div class="card row-card" v-if="reminder !== '不提醒'">
           <div class="card-title">
             <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
             <span>重复</span>
           </div>
-          <div class="select-wrapper">
-            <select v-model="repeat" class="custom-select">
-              <option>不重复</option>
-              <option>每天</option>
-              <option>每周</option>
-            </select>
-            <svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          <div class="custom-dropdown" tabindex="0" @blur="repeatOpen = false">
+            <div class="dropdown-selected" @click="repeatOpen = !repeatOpen">
+              <span>{{ repeat }}</span>
+              <svg class="select-arrow" :class="{ open: repeatOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+            <div class="dropdown-menu" v-show="repeatOpen">
+              <div class="dropdown-item" v-for="opt in repeatOptions" :key="opt" @click="repeat = opt; repeatOpen = false" :class="{ selected: repeat === opt }">
+                {{ opt }}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -185,7 +206,6 @@ const handleSave = () => {
   width: 580px;
   border-radius: 16px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
   font-family: inherit;
 }
 .modal-header-section {
@@ -253,14 +273,7 @@ const handleSave = () => {
   box-shadow: 0 2px 4px rgba(0,0,0,0.02);
 }
 
-.card-label {
-  display: block;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-main);
-  margin-bottom: 12px;
-}
-.card-label .required {
+.card-title .required {
   color: var(--danger-color);
 }
 
@@ -401,31 +414,69 @@ const handleSave = () => {
 .row-card .card-title {
   margin: 0;
 }
-.select-wrapper {
+.custom-dropdown {
   position: relative;
   width: 140px;
+  outline: none;
 }
-.custom-select {
-  appearance: none;
+.dropdown-selected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   width: 100%;
-  padding: 8px 32px 8px 16px;
+  padding: 8px 16px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: var(--bg-main);
   font-size: 14px;
   color: var(--text-main);
-  outline: none;
   cursor: pointer;
+  transition: all 0.2s;
+}
+.custom-dropdown:focus-within .dropdown-selected,
+.dropdown-selected:hover {
+  border-color: var(--primary-color);
 }
 .select-arrow {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
   width: 16px;
   height: 16px;
   color: var(--text-muted);
-  pointer-events: none;
+  transition: transform 0.2s;
+}
+.select-arrow.open {
+  transform: rotate(180deg);
+}
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 100%;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  z-index: 10;
+  animation: dropDown 0.2s ease-out;
+}
+@keyframes dropDown {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.dropdown-item {
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--text-main);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.dropdown-item:hover {
+  background: var(--bg-sidebar);
+}
+.dropdown-item.selected {
+  color: var(--primary-color);
+  background: var(--primary-light);
+  font-weight: 500;
 }
 
 .modal-footer {
@@ -468,8 +519,12 @@ const handleSave = () => {
   background-color: var(--bg-sidebar);
 }
 :global(.dark) .input-container,
-:global(.dark) .custom-select {
+:global(.dark) .dropdown-selected,
+:global(.dark) .dropdown-menu {
   background-color: var(--bg-main);
+}
+:global(.dark) .dropdown-menu {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 :global(.dark) .close-btn,
 :global(.dark) .btn-cancel {
