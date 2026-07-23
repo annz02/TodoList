@@ -13,8 +13,7 @@ import SettingsModal from './components/SettingsModal.vue';
 import TaskItem from './components/TaskItem.vue';
 import TaskModal from './components/TaskModal.vue';
 import Toast from './components/Toast.vue';
-
-const { applyTheme } = useTheme();
+const { initTheme } = useTheme();
 const { showToast } = useToast();
 
 const todos = ref<Todo[]>([]);
@@ -38,9 +37,9 @@ const loadTodos = async () => {
       { id: '2', title: 'Vue组件开发', completed: true, timeText: '14:00' },
       { id: '3', title: '学习 Rust', completed: false, timeText: '20:00' },
       { id: '4', title: '去健身房', completed: false, timeText: '明天 19:00' },
-      { id: '5', title: '买牛奶', completed: false, timeText: '明天 18:00' }
     ];
   }
+  updateTimeTexts();
 };
 
 // Save to Rust backend
@@ -81,7 +80,7 @@ const playBeep = () => {
 
 onMounted(() => {
   loadTodos();
-  applyTheme();
+  initTheme();
 
   // Notification checker: run every minute
   checkInterval = window.setInterval(async () => {
@@ -142,6 +141,7 @@ onMounted(() => {
     if (hasUpdates) {
       saveTodos();
     }
+    updateTimeTexts();
   }, 60000);
 });
 
@@ -165,6 +165,32 @@ const formatTimeText = (dateStr: string) => {
   if (isToday) return timePart;
   if (isTomorrow) return `明天 ${timePart}`;
   return `${d.getMonth() + 1}月${d.getDate()}日 ${timePart}`;
+};
+
+const updateTimeTexts = () => {
+  let changed = false;
+  todos.value.forEach(task => {
+    if (task.dueDate) {
+      const newText = formatTimeText(task.dueDate);
+      if (task.timeText !== newText) {
+        task.timeText = newText;
+        changed = true;
+      }
+    }
+  });
+  if (changed) {
+    saveTodos();
+  }
+};
+
+const isTodayTask = (t: Todo) => {
+  if (t.dueDate) {
+    const d = new Date(t.dueDate);
+    const now = new Date();
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+    return d.getTime() <= endOfToday;
+  }
+  return !t.timeText.includes('明天') && !t.timeText.includes('月');
 };
 
 const saveTask = (taskData: { title: string; dueDate: string; notify: boolean; priority: number; reminderOption: string; repeatOption: string; lastNotifiedTime?: number | null }) => {
@@ -217,7 +243,7 @@ const filteredTodos = computed(() => {
   }
   
   if (activeCategory.value === 'today') {
-    result = result.filter(t => !t.timeText.includes('明天'));
+    result = result.filter(t => isTodayTask(t));
   } else if (activeCategory.value === 'completed') {
     result = result.filter(t => t.completed);
   } else if (activeCategory.value === 'my') {
@@ -227,7 +253,7 @@ const filteredTodos = computed(() => {
   return result;
 });
 
-const todayCount = computed(() => todos.value.filter(t => !t.completed && !t.timeText.includes('明天')).length);
+const todayCount = computed(() => todos.value.filter(t => !t.completed && isTodayTask(t)).length);
 const myTaskCount = computed(() => todos.value.filter(t => !t.completed).length);
 const completedCount = computed(() => todos.value.filter(t => t.completed).length);
 const allCount = computed(() => todos.value.length);
@@ -257,8 +283,9 @@ const closeWindow = () => getCurrentWindow().close();
   />
 
   <!-- Main Content -->
-  <main class="main-content">
-    <div class="window-controls">
+  <main class="main-content" style="position: relative;">
+    <div data-tauri-drag-region style="position: absolute; top: 0; left: 0; right: 0; height: 64px; z-index: 10;"></div>
+    <div class="window-controls" style="z-index: 10000;">
       <button @click="minimizeWindow" class="win-btn" title="最小化">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
       </button>
@@ -270,13 +297,15 @@ const closeWindow = () => getCurrentWindow().close();
       </button>
     </div>
     <header class="header">
-      <div class="header-left" data-tauri-drag-region style="flex-grow: 1;">
-        <h1>
-          {{ activeCategory === 'today' ? '今天' : activeCategory === 'completed' ? '已完成' : activeCategory === 'my' ? '我的任务' : '全部任务' }}
-        </h1>
-        <div class="date">{{ currentDate }}</div>
+      <div class="header-left" data-tauri-drag-region style="flex-grow: 1; z-index: 10;">
+        <div style="pointer-events: none;">
+          <h1>
+            {{ activeCategory === 'today' ? '今天' : activeCategory === 'completed' ? '已完成' : activeCategory === 'my' ? '我的任务' : '全部任务' }}
+          </h1>
+          <div class="date">{{ currentDate }}</div>
+        </div>
       </div>
-      <div class="header-right">
+      <div class="header-right" style="z-index: 11;">
         <div class="search-box">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" placeholder="搜索任务..." v-model="searchQuery">

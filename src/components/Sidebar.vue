@@ -15,6 +15,7 @@ const emit = defineEmits<{
 }>();
 
 const { themeMode, setThemeMode } = useTheme();
+
 </script>
 
 <template>
