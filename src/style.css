@@ -150,8 +150,8 @@ body {
 .header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
   flex-wrap: nowrap;
   gap: 1rem;
   width: 100%;
@@ -159,15 +159,14 @@ body {
 
 .header-left {
   display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
+  flex-direction: column;
   flex-shrink: 0;
 }
 
 .header-left h1 {
   font-size: 1.8rem;
   font-weight: 600;
-  margin-bottom: 0;
+  margin-bottom: 0.25rem;
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -184,6 +183,7 @@ body {
   gap: 0.75rem;
   flex-shrink: 1;
   min-width: 0;
+  height: 35px; /* 与 h1 标题中心高度完全一致 */
 }
 
 .window-controls {
