@@ -192,33 +192,36 @@ const updateTimeTexts = () => {
   }
 };
 
+const getYYYYMMDD = (dateInput?: string | Date) => {
+  if (!dateInput) return '';
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return '';
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 const isTodayTask = (t: Todo) => {
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
-  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+  const todayStr = getYYYYMMDD(new Date());
+  const taskDateStr = getYYYYMMDD(t.startTime || t.dueDate);
 
-  // 优先根据开始时间 startTime 判断，其次 dueDate
-  const targetDateStr = t.startTime || t.dueDate;
-
-  if (targetDateStr) {
-    const targetTime = new Date(targetDateStr).getTime();
-    if (!isNaN(targetTime)) {
-      // 1. 如果时间在今天之后（未来），不属于今天
-      if (targetTime > endOfToday) {
-        return false;
-      }
-      // 2. 如果时间属于今天
-      if (targetTime >= startOfToday && targetTime <= endOfToday) {
-        return true;
-      }
-      // 3. 如果时间在今天之前（过去）：如果未完成，第二天（及之后）继续在今天展示
-      if (targetTime < startOfToday) {
-        return !t.completed;
-      }
+  if (taskDateStr) {
+    // 1. 开始时间/截至时间等于今天：属于今天！
+    if (taskDateStr === todayStr) {
+      return true;
+    }
+    // 2. 开始时间属于未来（晚于今天）：不属于今天！
+    if (taskDateStr > todayStr) {
+      return false;
+    }
+    // 3. 开始时间属于过去（早于今天）：未标记完成的任务第二天及以后继续在“今天”展示
+    if (taskDateStr < todayStr) {
+      return !t.completed;
     }
   }
 
-  // 无具体时间设置时，默认为今天任务
+  // 没有设定具体日期时，默认属于今天
   return true;
 };
 
