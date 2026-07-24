@@ -216,6 +216,11 @@ const applyChange = () => {
   }
 };
 
+const handleConfirm = () => {
+  applyChange();
+  isOpen.value = false;
+};
+
 const toggleOpen = () => {
   if (!isOpen.value) {
     parseModelValue();
@@ -392,7 +397,7 @@ onUnmounted(() => {
               <svg class="trigger-chevron" :class="{ open: showTimePickerWheel }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </button>
             
-            <button class="confirm-btn" @click="isOpen = false">确定</button>
+            <button class="confirm-btn" @click="handleConfirm">确定</button>
           </div>
 
           <!-- 完全参照日历 UI 风格设计的纯自定义双列时间选择下拉面板 -->
