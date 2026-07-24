@@ -7,15 +7,13 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ 
   (e: 'close'): void;
-  (e: 'save', taskData: { title: string; dueDate: string; notify: boolean; priority: number; reminderOption: string; repeatOption: string; lastNotifiedTime?: number | null }): void;
+  (e: 'save', taskData: { title: string; dueDate: string; notify: boolean; reminderOption: string; repeatOption: string; lastNotifiedTime?: number | null }): void;
 }>();
 
 const title = ref('');
 const titleError = ref('');
 const dateTimeError = ref('');
 const dateTime = ref('');
-const priority = ref(0);
-const priorityLabels = ['低', '较低', '中', '较高', '高'];
 
 const reminder = ref('15 分钟前');
 const repeat = ref('不重复');
@@ -41,12 +39,10 @@ watch(() => props.show, (newVal) => {
       dateTime.value = props.initialTask.dueDate ? props.initialTask.dueDate.substring(0, 16) : '';
       reminder.value = props.initialTask.reminderOption || (props.initialTask.notify ? '15 分钟前' : '不提醒');
       repeat.value = props.initialTask.repeatOption || '不重复';
-      priority.value = props.initialTask.priority || 0;
     } else {
       title.value = '';
       dateTime.value = '';
       reminder.value = '15 分钟前';
-      priority.value = 0;
     }
   }
 });
@@ -78,7 +74,6 @@ const handleSave = () => {
     title: title.value.trim(),
     dueDate: dateTime.value,
     notify: reminder.value !== '不提醒',
-    priority: priority.value,
     reminderOption: reminder.value,
     repeatOption: repeat.value,
     lastNotifiedTime: props.initialTask?.lastNotifiedTime
@@ -120,37 +115,20 @@ const handleSave = () => {
           <span v-if="titleError" class="error-msg">{{ titleError }}</span>
         </div>
 
-        <!-- Date & Priority Row -->
-        <div class="row-cards">
-          <!-- Date Card -->
-          <div class="card half-card">
-            <div class="card-title">
-              <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-              <span>截止时间 <span class="required">*</span></span>
-            </div>
-            <div class="date-picker-box" :class="{ 'has-error': dateTimeError }" @click="triggerDatePicker" style="cursor: pointer; padding-left: 12px; position: relative; display: flex; align-items: center;">
-              <svg class="small-icon" style="margin-right: 8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-              <span class="date-text" :class="{ 'has-value': dateTime }">
-                {{ dateTime ? dateTime.replace('T', ' ') : '选择日期和时间' }}
-              </span>
-              <input type="datetime-local" ref="dateInputRef" v-model="dateTime" @input="dateTimeError = ''" class="overlay-input" style="pointer-events: none;" />
-            </div>
-            <span v-if="dateTimeError" class="error-msg">{{ dateTimeError }}</span>
+        <!-- Date Card -->
+        <div class="card date-card">
+          <div class="card-title">
+            <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <span>截止时间 <span class="required">*</span></span>
           </div>
-          
-          <!-- Priority Card -->
-          <div class="card half-card">
-            <div class="card-title">
-              <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
-              <span>优先级</span>
-            </div>
-            <div class="stars-row">
-              <div class="star-item" v-for="i in 5" :key="i" @click="priority = i">
-                <svg class="star-svg" :class="{ active: i <= priority }" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-                <span class="star-label" :class="{ active: i === priority }">{{ priorityLabels[i-1] }}</span>
-              </div>
-            </div>
+          <div class="date-picker-box" :class="{ 'has-error': dateTimeError }" @click="triggerDatePicker" style="cursor: pointer; padding-left: 12px; position: relative; display: flex; align-items: center;">
+            <svg class="small-icon" style="margin-right: 8px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <span class="date-text" :class="{ 'has-value': dateTime }">
+              {{ dateTime ? dateTime.replace('T', ' ') : '选择日期和时间' }}
+            </span>
+            <input type="datetime-local" ref="dateInputRef" v-model="dateTime" @input="dateTimeError = ''" class="overlay-input" style="pointer-events: none;" />
           </div>
+          <span v-if="dateTimeError" class="error-msg">{{ dateTimeError }}</span>
         </div>
 
         <!-- Reminder Card -->
@@ -338,14 +316,6 @@ const handleSave = () => {
   margin-top: 8px;
 }
 
-.row-cards {
-  display: flex;
-  gap: 16px;
-}
-.half-card {
-  flex: 1;
-}
-
 .card-title {
   display: flex;
   align-items: center;
@@ -396,37 +366,6 @@ const handleSave = () => {
   height: 100%;
   opacity: 0;
   cursor: pointer;
-}
-
-
-.stars-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 0 8px;
-}
-.star-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-}
-.star-svg {
-  width: 22px;
-  height: 22px;
-  fill: var(--border-color);
-  transition: all 0.2s;
-}
-.star-svg.active {
-  fill: #f59e0b; /* keeping stars orange/gold */
-}
-.star-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  transition: color 0.2s;
-}
-.star-label.active {
-  color: var(--primary-color);
 }
 
 .row-card {

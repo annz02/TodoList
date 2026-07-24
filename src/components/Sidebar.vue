@@ -3,7 +3,6 @@ import { useTheme } from '../composables/useTheme';
 defineProps<{
   activeCategory: string;
   todayCount: number;
-  myTaskCount: number;
   completedCount: number;
   allCount: number;
 }>();
@@ -38,13 +37,6 @@ const { themeMode, setThemeMode } = useTheme();
           今天
         </div>
         <span class="badge">{{ todayCount }}</span>
-      </div>
-      <div class="menu-item" :class="{active: activeCategory === 'my'}" @click="emit('update:activeCategory', 'my')">
-        <div class="left">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-          我的任务
-        </div>
-        <span class="badge">{{ myTaskCount }}</span>
       </div>
       <div class="menu-item" :class="{active: activeCategory === 'completed'}" @click="emit('update:activeCategory', 'completed')">
         <div class="left">
