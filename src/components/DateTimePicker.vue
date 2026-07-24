@@ -21,11 +21,18 @@ const minuteListRef = ref<HTMLElement | null>(null);
 // 状态定义
 const viewYear = ref(new Date().getFullYear());
 const viewMonth = ref(new Date().getMonth()); // 0-11
-const selectedDateStr = ref(''); // YYYY-MM-DD
-const selectedTimeStr = ref('09:00'); // HH:mm
+const getNowHHmm = () => {
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+};
 
-const selectedHour = ref('09');
-const selectedMinute = ref('00');
+const selectedDateStr = ref(''); // YYYY-MM-DD
+const selectedTimeStr = ref(getNowHHmm()); // HH:mm
+
+const selectedHour = ref(String(new Date().getHours()).padStart(2, '0'));
+const selectedMinute = ref(String(new Date().getMinutes()).padStart(2, '0'));
 
 // 保持 Hour / Minute 与 selectedTimeStr 同步
 watch(selectedTimeStr, (newVal) => {
@@ -58,13 +65,14 @@ const parseModelValue = () => {
     }
   }
   
-  // 默认今天
+  // 默认今天与当前时刻
   const today = new Date();
   const yyyy = today.getFullYear();
   const mm = String(today.getMonth() + 1).padStart(2, '0');
   const dd = String(today.getDate()).padStart(2, '0');
+  
   selectedDateStr.value = `${yyyy}-${mm}-${dd}`;
-  selectedTimeStr.value = '09:00';
+  selectedTimeStr.value = getNowHHmm();
   viewYear.value = today.getFullYear();
   viewMonth.value = today.getMonth();
 };
