@@ -193,13 +193,33 @@ const updateTimeTexts = () => {
 };
 
 const isTodayTask = (t: Todo) => {
-  if (t.dueDate) {
-    const d = new Date(t.dueDate);
-    const now = new Date();
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
-    return d.getTime() <= endOfToday;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+
+  // 优先根据开始时间 startTime 判断，其次 dueDate
+  const targetDateStr = t.startTime || t.dueDate;
+
+  if (targetDateStr) {
+    const targetTime = new Date(targetDateStr).getTime();
+    if (!isNaN(targetTime)) {
+      // 1. 如果时间在今天之后（未来），不属于今天
+      if (targetTime > endOfToday) {
+        return false;
+      }
+      // 2. 如果时间属于今天
+      if (targetTime >= startOfToday && targetTime <= endOfToday) {
+        return true;
+      }
+      // 3. 如果时间在今天之前（过去）：如果未完成，第二天（及之后）继续在今天展示
+      if (targetTime < startOfToday) {
+        return !t.completed;
+      }
+    }
   }
-  return !t.timeText.includes('明天') && !t.timeText.includes('月');
+
+  // 无具体时间设置时，默认为今天任务
+  return true;
 };
 
 const toggleComplete = (task: Todo) => {
