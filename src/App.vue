@@ -17,11 +17,17 @@ const { initTheme } = useTheme();
 const { showToast } = useToast();
 
 const todos = ref<Todo[]>([]);
+const nowRef = ref(new Date());
 const showInlineCreate = ref(false);
 const searchQuery = ref('');
 const activeCategory = ref('today');
 const showSettingsModal = ref(false);
 let checkInterval: number;
+
+const syncCurrentTime = () => {
+  nowRef.value = new Date();
+  updateTimeTexts();
+};
 
 // Load from Rust backend
 const loadTodos = async () => {
@@ -81,9 +87,13 @@ onMounted(() => {
   loadTodos();
   initTheme();
 
-  // Notification checker: run every minute
+  window.addEventListener('focus', syncCurrentTime);
+  document.addEventListener('visibilitychange', syncCurrentTime);
+
+  // Notification checker & Time syncer
   checkInterval = window.setInterval(async () => {
-    const now = new Date().getTime();
+    syncCurrentTime();
+    const now = nowRef.value.getTime();
     let hasUpdates = false;
     
     // Check system notification permission
@@ -140,18 +150,19 @@ onMounted(() => {
     if (hasUpdates) {
       saveTodos();
     }
-    updateTimeTexts();
-  }, 60000);
+  }, 5000);
 });
 
 onUnmounted(() => {
   if (checkInterval) clearInterval(checkInterval);
+  window.removeEventListener('focus', syncCurrentTime);
+  document.removeEventListener('visibilitychange', syncCurrentTime);
 });
 
 const formatSingleTime = (dateStr?: string) => {
   if (!dateStr) return '';
   const d = new Date(dateStr);
-  const now = new Date();
+  const now = nowRef.value;
   
   const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   
@@ -203,7 +214,7 @@ const getYYYYMMDD = (dateInput?: string | Date) => {
 };
 
 const isTodayTask = (t: Todo) => {
-  const todayStr = getYYYYMMDD(new Date());
+  const todayStr = getYYYYMMDD(nowRef.value);
   const taskDateStr = getYYYYMMDD(t.startTime || t.dueDate);
 
   if (taskDateStr) {
