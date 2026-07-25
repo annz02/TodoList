@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import DateTimePicker from './DateTimePicker.vue';
 
 const emit = defineEmits<{
@@ -33,6 +33,20 @@ const handleSave = () => {
   startTime.value = '';
   dueDate.value = '';
 };
+
+const handleSaveShortcut = () => {
+  if (title.value.trim()) {
+    handleSave();
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('app-save-shortcut', handleSaveShortcut);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('app-save-shortcut', handleSaveShortcut);
+});
 </script>
 
 <template>

@@ -1,37 +1,457 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import { useTheme } from '../composables/useTheme';
 
 defineProps<{ show: boolean }>();
 const emit = defineEmits<{ (e: 'close'): void }>();
 
-const { primaryColor, themeColors, setPrimaryColor } = useTheme();
+const { primaryColor, themeColors, setPrimaryColor, themeMode, setThemeMode } = useTheme();
+const activeTab = ref<'general' | 'shortcuts'>('general');
+
+const colorNames: Record<string, string> = {
+  '#3b82f6': '经典蓝',
+  '#6366f1': '罗兰紫',
+  '#10b981': '翡翠绿',
+  '#f59e0b': '琥珀橙',
+  '#ec4899': '玫瑰粉',
+};
 </script>
 
 <template>
-  <div v-if="show" class="modal-overlay" @click="emit('close')">
-    <div class="modal-content" @click.stop>
-      <div class="modal-header">
-        <h2>设置</h2>
-        <button class="close-btn" @click="emit('close')">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
-      </div>
+  <Transition name="modal-fade">
+    <div v-if="show" class="modal-overlay" @click.self="emit('close')">
+      <div class="modal-card">
+        <!-- 左侧侧边导航 -->
+        <aside class="settings-nav">
+          <div class="nav-header">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            <span>设置</span>
+          </div>
 
+          <nav class="nav-menu">
+            <button 
+              type="button"
+              class="nav-item" 
+              :class="{ active: activeTab === 'general' }" 
+              @click.stop="activeTab = 'general'"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 8v4l3 3"></path></svg>
+              通用
+            </button>
+            <button 
+              type="button"
+              class="nav-item" 
+              :class="{ active: activeTab === 'shortcuts' }" 
+              @click.stop="activeTab = 'shortcuts'"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M18 12h.01M8 16h8"></path></svg>
+              快捷键
+            </button>
+          </nav>
+        </aside>
 
+        <!-- 右侧主内容区域 -->
+        <main class="settings-content">
+          <div class="content-header">
+            <h2 class="content-title">{{ activeTab === 'general' ? '通用设置' : '快捷键说明' }}</h2>
+            <button type="button" class="close-icon-btn" @click.stop="emit('close')" title="关闭">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
 
-      <div class="setting-group">
-        <label>主题颜色</label>
-        <div class="color-options">
-          <button 
-            v-for="color in themeColors" 
-            :key="color"
-            class="color-swatch"
-            :class="{active: primaryColor === color}"
-            :style="{backgroundColor: color}"
-            @click="setPrimaryColor(color)"
-          ></button>
-        </div>
+          <div class="content-body">
+            <!-- 通用页签内容 -->
+            <div v-if="activeTab === 'general'" class="tab-panel general-panel">
+              <!-- 深色模式设置 -->
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <span class="card-title" style="margin:0;">深色模式</span>
+                  </div>
+                  <div 
+                    class="toggle-switch" 
+                    :class="{ active: themeMode === 'dark' }" 
+                    @click.stop="setThemeMode(themeMode === 'dark' ? 'light' : 'dark')"
+                  >
+                    <div class="toggle-knob"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 主题颜色设置 -->
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <span class="card-title" style="margin:0;">主题色</span>
+                  </div>
+                  
+                  <div class="color-palette">
+                    <button 
+                      type="button"
+                      v-for="color in themeColors" 
+                      :key="color"
+                      class="color-btn"
+                      :class="{ active: primaryColor === color }"
+                      :style="{ backgroundColor: color }"
+                      :title="colorNames[color] || color"
+                      @click.stop="setPrimaryColor(color)"
+                    >
+                      <svg v-if="primaryColor === color" class="check-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 快捷键页签内容 -->
+            <div v-if="activeTab === 'shortcuts'" class="tab-panel shortcuts-panel">
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="info-text">
+                      <span class="card-title">新建任务</span>
+                      <span class="card-desc">呼出新建任务卡片</span>
+                    </div>
+                  </div>
+                  <div class="key-caps">
+                    <kbd class="key-cap">Ctrl</kbd>
+                    <span class="plus">+</span>
+                    <kbd class="key-cap">N</kbd>
+                  </div>
+                </div>
+              </div>
+
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="info-text">
+                      <span class="card-title">保存任务</span>
+                      <span class="card-desc">保存新建卡片或修改内容</span>
+                    </div>
+                  </div>
+                  <div class="key-caps">
+                    <kbd class="key-cap">Ctrl</kbd>
+                    <span class="plus">+</span>
+                    <kbd class="key-cap">S</kbd>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
       </div>
     </div>
-  </div>
+  </Transition>
 </template>
+
+<style scoped>
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+.modal-card {
+  width: 580px;
+  height: 380px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  display: flex;
+  overflow: hidden;
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.3);
+  animation: cardPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes cardPop {
+  from { transform: scale(0.96); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* 左侧 Sidebar Nav */
+.settings-nav {
+  width: 160px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-color);
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.nav-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 20px;
+  padding: 0 6px;
+}
+
+.nav-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
+}
+
+.nav-item:hover:not(.active) {
+  background: var(--bg-main);
+  color: var(--text-main);
+}
+
+.nav-item.active {
+  background: var(--primary-light);
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+/* 右侧 Main Content */
+.settings-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+
+.content-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.content-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.close-icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s ease;
+}
+
+.close-icon-btn:hover {
+  background: var(--bg-sidebar);
+  color: var(--text-main);
+}
+
+.tab-panel {
+  animation: panelFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.general-panel,
+.shortcuts-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+@keyframes panelFade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Setting Card Design */
+.setting-card {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.general-panel .setting-card,
+.shortcuts-panel .setting-card {
+  height: 64px;
+  min-height: 64px;
+  padding: 0 20px;
+  justify-content: center;
+  gap: 0;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.setting-info {
+  display: flex;
+  align-items: center;
+}
+
+.info-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.toggle-switch {
+  width: 44px;
+  height: 24px;
+  background: var(--border-color);
+  border-radius: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toggle-switch.active {
+  background-color: var(--primary-color);
+}
+
+.toggle-knob {
+  width: 18px;
+  height: 18px;
+  background: #ffffff;
+  border-radius: 50%;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toggle-switch.active .toggle-knob {
+  transform: translateX(20px);
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 2px;
+  line-height: 1.2;
+}
+
+.card-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+/* Color Palette */
+.color-palette {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.color-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.color-btn:hover {
+  transform: scale(1.12);
+}
+
+.color-btn.active {
+  transform: scale(1.18);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.check-icon {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  animation: checkPop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes checkPop {
+  from {
+    transform: scale(0.3) rotate(-15deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+
+/* Shortcut Items */
+.key-caps {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.key-cap {
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 2px 0 var(--border-color);
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.plus {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 0 2px;
+}
+</style>

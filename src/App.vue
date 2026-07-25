@@ -153,10 +153,30 @@ onMounted(() => {
   }, 5000);
 });
 
+const handleGlobalKeydown = (e: KeyboardEvent) => {
+  const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+  if (!isCtrlOrCmd) return;
+
+  const key = e.key.toLowerCase();
+  
+  if (key === 'n') {
+    e.preventDefault();
+    handleAddTaskClick();
+  } else if (key === 's') {
+    e.preventDefault();
+    window.dispatchEvent(new CustomEvent('app-save-shortcut'));
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('keydown', handleGlobalKeydown);
+});
+
 onUnmounted(() => {
   if (checkInterval) clearInterval(checkInterval);
   window.removeEventListener('focus', syncCurrentTime);
   document.removeEventListener('visibilitychange', syncCurrentTime);
+  window.removeEventListener('keydown', handleGlobalKeydown);
 });
 
 const formatSingleTime = (dateStr?: string) => {
@@ -224,7 +244,7 @@ const isTodayTask = (t: Todo) => {
   const primaryDateStr = startDateStr || dueDateStr;
 
   if (primaryDateStr) {
-    // 1. 开始时间/结束时间等于今天：属于今天
+    // 1. 开始时间/结束时间等于今天：属于今天（无论是未完成还是今天完成的，今天都保留展示在“今天”列表中）
     if (primaryDateStr === todayStr) {
       return true;
     }
@@ -232,18 +252,31 @@ const isTodayTask = (t: Todo) => {
     if (primaryDateStr > todayStr) {
       return false;
     }
-    // 3. 开始时间属于过去（早于今天）：未完成的任务自动流动并继续在“今天”展示
+    // 3. 开始时间属于过去（早于今天）：到了第二天及以后，已完成任务自动移出，未完成任务自动流动并继续在“今天”展示
     if (primaryDateStr < todayStr) {
       return !t.completed;
     }
   }
 
-  // 没有设定具体日期时，默认属于今天
+  // 没有设定具体日期的任务：
+  if (t.completed) {
+    // 如果是今天完成的无日期任务，今天保留在“今天”列表，第二天（completedAt < todayStr）自动移出
+    const completedDateStr = getYYYYMMDD(t.completedAt);
+    if (completedDateStr) {
+      return completedDateStr === todayStr;
+    }
+  }
+
   return true;
 };
 
 const toggleComplete = (task: Todo) => {
   task.completed = !task.completed;
+  if (task.completed) {
+    task.completedAt = getYYYYMMDD(nowRef.value);
+  } else {
+    delete task.completedAt;
+  }
   saveTodos();
 };
 
@@ -278,7 +311,7 @@ const filteredTodos = computed(() => {
   return result;
 });
 
-const todayCount = computed(() => todos.value.filter(t => !t.completed && isTodayTask(t)).length);
+const todayCount = computed(() => todos.value.filter(t => isTodayTask(t)).length);
 const completedCount = computed(() => todos.value.filter(t => t.completed).length);
 const allCount = computed(() => todos.value.length);
 

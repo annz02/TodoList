@@ -11,4 +11,5 @@ export interface Todo {
   reminderOption?: string;
   repeatOption?: string;
   lastNotifiedTime?: number;
+  completedAt?: string;
 }

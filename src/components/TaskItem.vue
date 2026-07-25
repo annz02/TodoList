@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import type { Todo } from '../types';
 import DateTimePicker from './DateTimePicker.vue';
 
@@ -36,6 +36,20 @@ const handleSaveEdit = () => {
   });
   isEditing.value = false;
 };
+
+const handleSaveShortcut = () => {
+  if (isEditing.value && editTitle.value.trim()) {
+    handleSaveEdit();
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('app-save-shortcut', handleSaveShortcut);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('app-save-shortcut', handleSaveShortcut);
+});
 
 const formatDateTime = (dateStr?: string) => {
   if (!dateStr) return '';
