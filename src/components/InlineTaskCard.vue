@@ -37,45 +37,48 @@ const handleSave = () => {
 
 <template>
   <div class="inline-task-card">
-    <div class="card-content">
+    <div class="card-header">
+      <span class="new-tag">
+        <span class="new-dot"></span>
+        新任务
+      </span>
+    </div>
+
+    <div class="card-body">
       <!-- 任务名称输入框 (无 label 前缀, 仅 placeholder 提示) -->
-      <div class="title-input-wrapper">
-        <input 
-          type="text" 
-          v-model="title" 
-          placeholder="任务名称" 
-          class="inline-title-input"
-          autofocus
-          @keyup.enter="handleSave"
-          @keyup.esc="emit('cancel')"
+      <input 
+        type="text" 
+        v-model="title" 
+        placeholder="输入任务名称..." 
+        class="inline-title-input"
+        autofocus
+        @keyup.enter="handleSave"
+        @keyup.esc="emit('cancel')"
+      />
+    </div>
+
+    <!-- 时间与按钮控制区 -->
+    <div class="card-footer">
+      <div class="time-pickers-group">
+        <!-- 任务开始时间选择器 -->
+        <DateTimePicker 
+          v-model="startTime" 
+          placeholder="开始时间" 
+          iconType="start" 
+        />
+        <span class="time-separator">至</span>
+        <!-- 任务结束时间选择器 -->
+        <DateTimePicker 
+          v-model="dueDate" 
+          placeholder="结束时间" 
+          iconType="end" 
         />
       </div>
 
-      <!-- 时间与按钮控制区 -->
-      <div class="card-footer">
-        <div class="time-pickers-group">
-          <!-- 任务开始时间选择器 -->
-          <DateTimePicker 
-            v-model="startTime" 
-            placeholder="开始时间" 
-            iconType="start" 
-          />
-
-          <span class="time-separator">至</span>
-
-          <!-- 任务结束时间选择器 -->
-          <DateTimePicker 
-            v-model="dueDate" 
-            placeholder="结束时间" 
-            iconType="end" 
-          />
-        </div>
-
-        <!-- 操作按钮 -->
-        <div class="actions">
-          <button class="btn-cancel" @click="emit('cancel')">取消</button>
-          <button class="btn-save" :disabled="!title.trim()" @click="handleSave">确定</button>
-        </div>
+      <!-- 操作按钮 -->
+      <div class="actions">
+        <button class="btn-cancel" @click="emit('cancel')">取消</button>
+        <button class="btn-save" :disabled="!title.trim()" @click="handleSave">创建</button>
       </div>
     </div>
   </div>
@@ -84,27 +87,49 @@ const handleSave = () => {
 <style scoped>
 .inline-task-card {
   background: var(--bg-main);
-  border: 1.5px solid var(--primary-color);
-  border-radius: 12px;
-  padding: 14px 18px;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.12);
-  margin-top: 10px;
-  animation: fadeIn 0.2s ease-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.card-content {
+  border: 1.5px dashed var(--primary-color);
+  border-radius: 14px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  justify-content: space-between;
+  min-height: 140px;
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.12);
+  box-sizing: border-border;
+  animation: cardPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.title-input-wrapper {
-  width: 100%;
+@keyframes cardPop {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.card-header {
+  margin-bottom: 8px;
+}
+
+.new-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--primary-light);
+  color: var(--primary-color);
+}
+
+.new-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--primary-color);
+}
+
+.card-body {
+  flex: 1;
+  margin-bottom: 12px;
 }
 
 .inline-title-input {
@@ -120,39 +145,39 @@ const handleSave = () => {
 
 .inline-title-input::placeholder {
   color: var(--text-muted);
-  font-weight: 400;
 }
 
 .card-footer {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-color);
 }
 
 .time-pickers-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .time-separator {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
 .actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
-  margin-left: auto;
 }
 
 .btn-cancel, .btn-save {
-  padding: 6px 16px;
+  padding: 4px 14px;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -187,6 +212,5 @@ const handleSave = () => {
 /* Dark Mode support */
 :global(.dark) .inline-task-card {
   background-color: var(--bg-sidebar);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 </style>
