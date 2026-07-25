@@ -36,201 +36,244 @@ const handleSave = () => {
 </script>
 
 <template>
-  <div class="inline-task-card">
-    <div class="card-edit-form">
-      <div class="edit-header-row">
-        <span class="new-badge">
-          <span class="new-dot"></span>
-          新建任务
-        </span>
-      </div>
-
-      <!-- 任务名称输入 -->
-      <div class="form-item">
+  <div class="task-card create-card">
+    <!-- Header: Same structure -->
+    <div class="card-header">
+      <div class="header-left">
+        <div class="circle-checkbox" title="新建任务"></div>
         <input 
           type="text" 
           v-model="title" 
-          placeholder="输入任务名称..." 
-          class="card-edit-title-input"
+          placeholder="输入任务标题..." 
+          class="card-title-input" 
           autofocus
           @keyup.enter="handleSave"
           @keyup.esc="emit('cancel')"
         />
       </div>
 
-      <!-- 时间选择双列区域 -->
-      <div class="form-time-row">
-        <div class="time-field-box">
-          <span class="field-label">开始时间</span>
-          <DateTimePicker 
-            v-model="startTime" 
-            placeholder="选择开始时间" 
-            iconType="start" 
-          />
-        </div>
-        <div class="time-field-box">
-          <span class="field-label">结束时间</span>
-          <DateTimePicker 
-            v-model="dueDate" 
-            placeholder="选择结束时间" 
-            iconType="end" 
-          />
-        </div>
+      <div class="header-actions">
+        <button class="action-btn cancel-btn" @click="emit('cancel')" title="取消创建">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <button class="action-btn save-btn" :disabled="!title.trim()" @click="handleSave" title="完成创建">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Divider: Same structure -->
+    <div class="card-divider"></div>
+
+    <!-- Details: Same structure -->
+    <div class="card-details">
+      <div class="time-row">
+        <svg class="calendar-icon blue" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+          <circle cx="8" cy="14" r="0.8" fill="currentColor"></circle>
+          <circle cx="12" cy="14" r="0.8" fill="currentColor"></circle>
+          <circle cx="16" cy="14" r="0.8" fill="currentColor"></circle>
+          <circle cx="8" cy="18" r="0.8" fill="currentColor"></circle>
+          <circle cx="12" cy="18" r="0.8" fill="currentColor"></circle>
+          <circle cx="16" cy="18" r="0.8" fill="currentColor"></circle>
+        </svg>
+        <span class="time-label">开始时间</span>
+        <DateTimePicker 
+          v-model="startTime" 
+          placeholder="选择开始时间" 
+          iconType="start" 
+        />
       </div>
 
-      <!-- 操作按钮行 -->
-      <div class="form-actions-row">
-        <button class="btn-cancel" @click="emit('cancel')">取消</button>
-        <button class="btn-save" :disabled="!title.trim()" @click="handleSave">创建任务</button>
+      <div class="time-row">
+        <svg class="calendar-icon green" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+          <circle cx="8" cy="14" r="0.8" fill="currentColor"></circle>
+          <circle cx="12" cy="14" r="0.8" fill="currentColor"></circle>
+          <circle cx="16" cy="14" r="0.8" fill="currentColor"></circle>
+          <circle cx="8" cy="18" r="0.8" fill="currentColor"></circle>
+          <circle cx="12" cy="18" r="0.8" fill="currentColor"></circle>
+          <circle cx="16" cy="18" r="0.8" fill="currentColor"></circle>
+        </svg>
+        <span class="time-label">结束时间</span>
+        <DateTimePicker 
+          v-model="dueDate" 
+          placeholder="选择结束时间" 
+          iconType="end" 
+        />
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.inline-task-card {
+.task-card.create-card {
+  position: relative;
   background: var(--bg-main);
   border: 1.5px dashed var(--primary-color);
   border-radius: 14px;
   padding: 16px;
-  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.14);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 156px;
+  min-height: 156px;
+  box-shadow: 0 8px 20px -4px rgba(59, 130, 246, 0.15);
   box-sizing: border-box;
-  animation: cardPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: cardPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes cardPop {
-  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  from { opacity: 0; transform: scale(0.97) translateY(4px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-.card-edit-form {
+.card-header {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
   width: 100%;
+  height: 30px;
 }
 
-.edit-header-row {
+.header-left {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.circle-checkbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--primary-color);
+  background: transparent;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.new-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--primary-color);
-  background: var(--primary-light);
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.new-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--primary-color);
-}
-
-.card-edit-title-input {
+.card-title-input {
   width: 100%;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 8px 12px;
+  border: none;
   outline: none;
-  background: var(--bg-sidebar);
-  font-size: 14px;
-  font-weight: 500;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--text-main);
   box-sizing: border-box;
-  transition: border-color 0.2s, background-color 0.2s;
 }
 
-.card-edit-title-input:focus {
-  border-color: var(--primary-color);
-  background: var(--bg-main);
-}
-
-.card-edit-title-input::placeholder {
+.card-title-input::placeholder {
   color: var(--text-muted);
+  font-weight: 400;
 }
 
-.form-time-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: var(--bg-sidebar);
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px solid var(--border-color);
-}
-
-.time-field-box {
+.header-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
-.field-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  font-weight: 500;
-}
-
-.form-actions-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.btn-cancel, .btn-save {
-  padding: 6px 14px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-cancel {
+.action-btn {
   background: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.btn-cancel:hover {
-  background: var(--bg-sidebar);
+.action-btn:hover {
+  background-color: var(--bg-sidebar);
   color: var(--text-main);
 }
 
-.btn-save {
-  background: var(--primary-color);
-  border: none;
-  color: #ffffff;
+.save-btn:hover:not(:disabled) {
+  color: var(--primary-color);
+  background-color: var(--primary-light);
 }
 
-.btn-save:hover:not(:disabled) {
-  background: var(--primary-hover);
-}
-
-.btn-save:disabled {
-  opacity: 0.5;
+.save-btn:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-/* Dark mode overrides */
-:global(.dark) .inline-task-card {
-  background-color: var(--bg-sidebar);
+.cancel-btn:hover {
+  color: var(--danger-color);
 }
 
-:global(.dark) .form-time-row {
-  background-color: var(--bg-main);
+.card-divider {
+  border-top: 1px dashed var(--border-color);
+  margin: 12px 0;
+  width: 100%;
+}
+
+.card-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.time-row {
+  display: flex;
+  align-items: center;
+  font-size: 14.5px;
+  line-height: 1.5;
+  height: 26px;
+}
+
+.calendar-icon {
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.calendar-icon.blue {
+  color: var(--primary-color);
+}
+
+.calendar-icon.green {
+  color: #10b981;
+}
+
+.time-label {
+  color: var(--text-secondary);
+  margin-right: 20px;
+  font-size: 14.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+:deep(.picker-trigger) {
+  padding: 2px 8px;
+  height: 26px;
+  font-size: 13.5px;
+  box-sizing: border-box;
+}
+
+/* Dark mode overrides */
+:global(.dark) .task-card.create-card {
+  background-color: var(--bg-sidebar);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 </style>

@@ -38,10 +38,10 @@ const loadTodos = async () => {
     console.error('Failed to load todos:', e);
     // Dummy data for testing if no rust backend available
     todos.value = [
-      { id: '1', title: '写日报', completed: false, timeText: '17:00' },
-      { id: '2', title: 'Vue组件开发', completed: true, timeText: '14:00' },
-      { id: '3', title: '学习 Rust', completed: false, timeText: '20:00' },
-      { id: '4', title: '去健身房', completed: false, timeText: '明天 19:00' },
+      { id: '1', title: '完成项目需求文档', completed: false, startTime: '2024-05-20T09:00', dueDate: '2024-05-25T18:00', timeText: '2024-05-20 09:00 - 2024-05-25 18:00' },
+      { id: '2', title: 'Vue组件开发', completed: true, startTime: '2024-05-20T14:00', dueDate: '2024-05-20T17:00', timeText: '14:00 - 17:00' },
+      { id: '3', title: '学习 Rust', completed: false, startTime: '2024-05-20T20:00', dueDate: '2024-05-20T22:00', timeText: '20:00 - 22:00' },
+      { id: '4', title: '去健身房', completed: false, startTime: '2024-05-21T19:00', dueDate: '2024-05-21T20:30', timeText: '明天 19:00' },
     ];
   }
   updateTimeTexts();
@@ -162,6 +162,7 @@ onUnmounted(() => {
 const formatSingleTime = (dateStr?: string) => {
   if (!dateStr) return '';
   const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
   const now = nowRef.value;
   
   const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
@@ -172,9 +173,12 @@ const formatSingleTime = (dateStr?: string) => {
   
   const timePart = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   
-  if (isToday) return timePart;
+  if (isToday) return `今天 ${timePart}`;
   if (isTomorrow) return `明天 ${timePart}`;
-  return `${d.getMonth() + 1}月${d.getDate()}日 ${timePart}`;
+  if (d.getFullYear() === now.getFullYear()) {
+    return `${d.getMonth() + 1}月${d.getDate()}日 ${timePart}`;
+  }
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${timePart}`;
 };
 
 const formatTimeText = (dateStr?: string, startDateStr?: string) => {
@@ -215,19 +219,21 @@ const getYYYYMMDD = (dateInput?: string | Date) => {
 
 const isTodayTask = (t: Todo) => {
   const todayStr = getYYYYMMDD(nowRef.value);
-  const taskDateStr = getYYYYMMDD(t.startTime || t.dueDate);
+  const startDateStr = getYYYYMMDD(t.startTime);
+  const dueDateStr = getYYYYMMDD(t.dueDate);
+  const primaryDateStr = startDateStr || dueDateStr;
 
-  if (taskDateStr) {
-    // 1. 开始时间/截至时间等于今天：属于今天！
-    if (taskDateStr === todayStr) {
+  if (primaryDateStr) {
+    // 1. 开始时间/结束时间等于今天：属于今天
+    if (primaryDateStr === todayStr) {
       return true;
     }
-    // 2. 开始时间属于未来（晚于今天）：不属于今天！
-    if (taskDateStr > todayStr) {
+    // 2. 开始时间属于未来（晚于今天）：尚在未来，不出现在“今天”菜单
+    if (primaryDateStr > todayStr) {
       return false;
     }
-    // 3. 开始时间属于过去（早于今天）：未标记完成的任务第二天及以后继续在“今天”展示
-    if (taskDateStr < todayStr) {
+    // 3. 开始时间属于过去（早于今天）：未完成的任务自动流动并继续在“今天”展示
+    if (primaryDateStr < todayStr) {
       return !t.completed;
     }
   }
@@ -276,7 +282,7 @@ const todayCount = computed(() => todos.value.filter(t => !t.completed && isToda
 const completedCount = computed(() => todos.value.filter(t => t.completed).length);
 const allCount = computed(() => todos.value.length);
 
-const currentDate = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+const currentDate = computed(() => nowRef.value.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }));
 
 const handleAddTaskClick = () => {
   showInlineCreate.value = true;
