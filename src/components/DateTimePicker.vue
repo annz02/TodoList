@@ -103,7 +103,15 @@ const formatDisplay = computed(() => {
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${displayTime}`;
 });
 
-// 切换月份
+// 切换年份与月份
+const prevYear = () => {
+  viewYear.value--;
+};
+
+const nextYear = () => {
+  viewYear.value++;
+};
+
 const prevMonth = () => {
   if (viewMonth.value === 0) {
     viewMonth.value = 11;
@@ -119,6 +127,64 @@ const nextMonth = () => {
     viewYear.value++;
   } else {
     viewMonth.value++;
+  }
+};
+
+// 滚轮与触摸/拖拽滑动切月
+let wheelCooldown = false;
+const handleGridWheel = (e: WheelEvent) => {
+  if (wheelCooldown) return;
+  if (e.deltaY > 0 || e.deltaX > 0) {
+    nextMonth();
+    wheelCooldown = true;
+    setTimeout(() => { wheelCooldown = false; }, 220);
+  } else if (e.deltaY < 0 || e.deltaX < 0) {
+    prevMonth();
+    wheelCooldown = true;
+    setTimeout(() => { wheelCooldown = false; }, 220);
+  }
+};
+
+let touchStartX = 0;
+let touchStartY = 0;
+const handleTouchStart = (e: TouchEvent) => {
+  if (e.touches.length > 0) {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }
+};
+
+const handleTouchEnd = (e: TouchEvent) => {
+  if (e.changedTouches.length > 0) {
+    const deltaX = e.changedTouches[0].clientX - touchStartX;
+    const deltaY = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(deltaX) > 25 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      if (deltaX < 0) {
+        nextMonth();
+      } else {
+        prevMonth();
+      }
+    }
+  }
+};
+
+let dragStartX = 0;
+let isDragging = false;
+const handleMouseDown = (e: MouseEvent) => {
+  dragStartX = e.clientX;
+  isDragging = true;
+};
+
+const handleMouseUp = (e: MouseEvent) => {
+  if (!isDragging) return;
+  isDragging = false;
+  const deltaX = e.clientX - dragStartX;
+  if (Math.abs(deltaX) > 35) {
+    if (deltaX < 0) {
+      nextMonth();
+    } else {
+      prevMonth();
+    }
   }
 };
 
@@ -172,7 +238,7 @@ const calendarCells = computed<CalendarCell[]>(() => {
   }
 
   // 下月填充
-  const remaining = 42 - cells.length;
+  const remaining = (7 - (cells.length % 7)) % 7;
   for (let d = 1; d <= remaining; d++) {
     const nMonth = viewMonth.value === 11 ? 0 : viewMonth.value + 1;
     const nYear = viewMonth.value === 11 ? viewYear.value + 1 : viewYear.value;
@@ -195,14 +261,10 @@ const selectCell = (cell: CalendarCell) => {
 };
 
 // 快捷选项
-const setQuickOption = (type: 'today' | 'tomorrow' | 'weekend' | 'nextWeek') => {
+const setQuickOption = (type: 'today' | 'tomorrow' | 'nextWeek') => {
   const d = new Date();
   if (type === 'tomorrow') {
     d.setDate(d.getDate() + 1);
-  } else if (type === 'weekend') {
-    const day = d.getDay();
-    const diff = (6 - day + 7) % 7 || 7;
-    d.setDate(d.getDate() + diff);
   } else if (type === 'nextWeek') {
     d.setDate(d.getDate() + 7);
   }
@@ -328,10 +390,6 @@ onUnmounted(() => {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"></path></svg>
             明天
           </button>
-          <button class="quick-chip" @click="setQuickOption('weekend')">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
-            周末
-          </button>
           <button class="quick-chip" @click="setQuickOption('nextWeek')">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>
             下周
@@ -344,11 +402,17 @@ onUnmounted(() => {
         <div class="calendar-nav">
           <span class="month-year-text">{{ viewYear }}年 {{ viewMonth + 1 }}月</span>
           <div class="nav-btns">
+            <button class="nav-btn" @click="prevYear" title="上一年">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="11 18 5 12 11 6"></polyline><polyline points="18 18 12 12 18 6"></polyline></svg>
+            </button>
             <button class="nav-btn" @click="prevMonth" title="上个月">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
             </button>
             <button class="nav-btn" @click="nextMonth" title="下个月">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+            <button class="nav-btn" @click="nextYear" title="下一年">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 18 19 12 13 6"></polyline><polyline points="6 18 12 12 6 6"></polyline></svg>
             </button>
           </div>
         </div>
@@ -358,8 +422,15 @@ onUnmounted(() => {
           <span v-for="w in weekHeaders" :key="w" class="week-cell">{{ w }}</span>
         </div>
 
-        <!-- 日历天数网格 -->
-        <div class="days-grid">
+        <!-- 日历天数网格 (支持鼠标滚轮、触屏手势、鼠标左右拖拽滑动切换月份) -->
+        <div 
+          class="days-grid"
+          @wheel.prevent="handleGridWheel"
+          @touchstart="handleTouchStart"
+          @touchend="handleTouchEnd"
+          @mousedown="handleMouseDown"
+          @mouseup="handleMouseUp"
+        >
           <button 
             v-for="(cell, idx) in calendarCells" 
             :key="idx" 
@@ -539,7 +610,7 @@ onUnmounted(() => {
 /* 顶部 Quick Chips */
 .quick-header {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 4px;
 }
 
