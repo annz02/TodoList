@@ -273,7 +273,7 @@ onUnmounted(() => {
 }
 
 .calendar-icon.green {
-  color: #10b981;
+  color: var(--primary-color);
 }
 
 .time-label {

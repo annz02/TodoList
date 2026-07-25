@@ -466,7 +466,7 @@ const displayDueDate = computed(() => {
 }
 
 .calendar-icon.green {
-  color: #10b981;
+  color: var(--primary-color);
 }
 
 .calendar-icon.gray {
