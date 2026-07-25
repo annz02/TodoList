@@ -183,7 +183,7 @@ body {
   gap: 0.75rem;
   flex-shrink: 1;
   min-width: 0;
-  height: 35px; /* 与 h1 标题中心高度完全一致 */
+  height: 32px; /* 与搜索框和按钮高度一致 */
 }
 
 .window-controls {
@@ -226,15 +226,17 @@ body {
 }
 
 .search-box input {
-  padding: 0.6rem 1rem 0.6rem 2.2rem;
+  padding: 0 0.8rem 0 2.2rem;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   outline: none;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   transition: border-color 0.2s;
   width: 100%;
   max-width: 200px;
   min-width: 120px;
+  height: 32px;
+  box-sizing: border-box;
 }
 
 .search-box input:focus {
@@ -253,8 +255,10 @@ body {
   background-color: var(--primary-color);
   color: white;
   border: none;
-  padding: 0.6rem 1.2rem;
+  padding: 0 1rem;
+  height: 32px;
   border-radius: 6px;
+  font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
   display: flex;
@@ -263,6 +267,7 @@ body {
   transition: background-color 0.2s, transform 0.1s;
   white-space: nowrap;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .new-task-btn:hover {
