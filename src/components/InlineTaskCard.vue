@@ -40,12 +40,18 @@ const handleSaveShortcut = () => {
   }
 };
 
+const handleCancelShortcut = () => {
+  emit('cancel');
+};
+
 onMounted(() => {
   window.addEventListener('app-save-shortcut', handleSaveShortcut);
+  window.addEventListener('app-cancel-shortcut', handleCancelShortcut);
 });
 
 onUnmounted(() => {
   window.removeEventListener('app-save-shortcut', handleSaveShortcut);
+  window.removeEventListener('app-cancel-shortcut', handleCancelShortcut);
 });
 </script>
 

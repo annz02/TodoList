@@ -138,6 +138,54 @@ const colorNames: Record<string, string> = {
                   </div>
                 </div>
               </div>
+
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="info-text">
+                      <span class="card-title">编辑任务</span>
+                      <span class="card-desc">编辑选中的任务卡片</span>
+                    </div>
+                  </div>
+                  <div class="key-caps">
+                    <kbd class="key-cap">Ctrl</kbd>
+                    <span class="plus">+</span>
+                    <kbd class="key-cap">E</kbd>
+                  </div>
+                </div>
+              </div>
+
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="info-text">
+                      <span class="card-title">删除任务</span>
+                      <span class="card-desc">删除选中的任务卡片</span>
+                    </div>
+                  </div>
+                  <div class="key-caps">
+                    <kbd class="key-cap">Ctrl</kbd>
+                    <span class="plus">+</span>
+                    <kbd class="key-cap">D</kbd>
+                  </div>
+                </div>
+              </div>
+
+              <div class="setting-card">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="info-text">
+                      <span class="card-title">取消操作</span>
+                      <span class="card-desc">取消新建或编辑任务</span>
+                    </div>
+                  </div>
+                  <div class="key-caps">
+                    <kbd class="key-cap">Ctrl</kbd>
+                    <span class="plus">+</span>
+                    <kbd class="key-cap">W</kbd>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </main>
@@ -173,7 +221,8 @@ const colorNames: Record<string, string> = {
 
 .modal-card {
   width: 580px;
-  height: 380px;
+  height: 480px;
+  max-height: 85vh;
   background: var(--bg-main);
   border: 1px solid var(--border-color);
   border-radius: 16px;

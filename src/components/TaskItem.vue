@@ -3,11 +3,12 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import type { Todo } from '../types';
 import DateTimePicker from './DateTimePicker.vue';
 
-const props = defineProps<{ task: Todo }>();
+const props = defineProps<{ task: Todo; isSelected?: boolean }>();
 const emit = defineEmits<{
   (e: 'toggle', task: Todo): void;
   (e: 'delete', id: string): void;
   (e: 'update-task', updated: Todo): void;
+  (e: 'select', id: string): void;
 }>();
 
 const isEditing = ref(false);
@@ -43,12 +44,28 @@ const handleSaveShortcut = () => {
   }
 };
 
+const handleEditShortcut = () => {
+  if (props.isSelected && !isEditing.value) {
+    startEditing();
+  }
+};
+
+const handleCancelShortcut = () => {
+  if (isEditing.value) {
+    cancelEditing();
+  }
+};
+
 onMounted(() => {
   window.addEventListener('app-save-shortcut', handleSaveShortcut);
+  window.addEventListener('app-edit-shortcut', handleEditShortcut);
+  window.addEventListener('app-cancel-shortcut', handleCancelShortcut);
 });
 
 onUnmounted(() => {
   window.removeEventListener('app-save-shortcut', handleSaveShortcut);
+  window.removeEventListener('app-edit-shortcut', handleEditShortcut);
+  window.removeEventListener('app-cancel-shortcut', handleCancelShortcut);
 });
 
 const formatDateTime = (dateStr?: string) => {
@@ -110,7 +127,11 @@ const displayDueDate = computed(() => {
 </script>
 
 <template>
-  <div class="task-card" :class="{ completed: task.completed, 'is-editing': isEditing }">
+  <div 
+    class="task-card" 
+    :class="{ selected: isSelected, completed: task.completed, 'is-editing': isEditing }"
+    @click="emit('select', task.id)"
+  >
     <!-- Header: Same structure for View & Edit modes -->
     <div class="card-header">
       <div class="header-left" @click="!isEditing && emit('toggle', task)">
@@ -268,6 +289,11 @@ const displayDueDate = computed(() => {
   transform: translateY(-2px);
   border-color: var(--primary-color);
   box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.06);
+}
+
+.task-card.selected:not(.is-editing) {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px var(--primary-light), 0 8px 20px -4px rgba(0, 0, 0, 0.08);
 }
 
 .task-card.completed {

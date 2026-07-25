@@ -153,6 +153,8 @@ onMounted(() => {
   }, 5000);
 });
 
+const selectedTaskId = ref<string | null>(null);
+
 const handleGlobalKeydown = (e: KeyboardEvent) => {
   const isCtrlOrCmd = e.ctrlKey || e.metaKey;
   if (!isCtrlOrCmd) return;
@@ -165,6 +167,22 @@ const handleGlobalKeydown = (e: KeyboardEvent) => {
   } else if (key === 's') {
     e.preventDefault();
     window.dispatchEvent(new CustomEvent('app-save-shortcut'));
+  } else if (key === 'e') {
+    e.preventDefault();
+    if (selectedTaskId.value) {
+      window.dispatchEvent(new CustomEvent('app-edit-shortcut'));
+    }
+  } else if (key === 'd') {
+    e.preventDefault();
+    if (selectedTaskId.value) {
+      deleteTask(selectedTaskId.value);
+    }
+  } else if (key === 'w') {
+    e.preventDefault();
+    if (showInlineCreate.value) {
+      showInlineCreate.value = false;
+    }
+    window.dispatchEvent(new CustomEvent('app-cancel-shortcut'));
   }
 };
 
@@ -244,23 +262,18 @@ const isTodayTask = (t: Todo) => {
   const primaryDateStr = startDateStr || dueDateStr;
 
   if (primaryDateStr) {
-    // 1. 开始时间/结束时间等于今天：属于今天（无论是未完成还是今天完成的，今天都保留展示在“今天”列表中）
     if (primaryDateStr === todayStr) {
       return true;
     }
-    // 2. 开始时间属于未来（晚于今天）：尚在未来，不出现在“今天”菜单
     if (primaryDateStr > todayStr) {
       return false;
     }
-    // 3. 开始时间属于过去（早于今天）：到了第二天及以后，已完成任务自动移出，未完成任务自动流动并继续在“今天”展示
     if (primaryDateStr < todayStr) {
       return !t.completed;
     }
   }
 
-  // 没有设定具体日期的任务：
   if (t.completed) {
-    // 如果是今天完成的无日期任务，今天保留在“今天”列表，第二天（completedAt < todayStr）自动移出
     const completedDateStr = getYYYYMMDD(t.completedAt);
     if (completedDateStr) {
       return completedDateStr === todayStr;
@@ -281,8 +294,19 @@ const toggleComplete = (task: Todo) => {
 };
 
 const deleteTask = (id: string) => {
+  const index = filteredTodos.value.findIndex(t => t.id === id);
   todos.value = todos.value.filter(t => t.id !== id);
   saveTodos();
+
+  if (selectedTaskId.value === id) {
+    const remaining = filteredTodos.value;
+    if (remaining.length > 0) {
+      const nextIndex = Math.min(index, remaining.length - 1);
+      selectedTaskId.value = remaining[nextIndex].id;
+    } else {
+      selectedTaskId.value = null;
+    }
+  }
 };
 
 const handleUpdateTask = (updatedTask: Todo) => {
@@ -332,6 +356,7 @@ const handleInlineSave = (data: { title: string; startTime: string; dueDate: str
   };
   todos.value.push(newTask);
   saveTodos();
+  selectedTaskId.value = newTask.id;
   showInlineCreate.value = false;
 };
 
@@ -391,6 +416,8 @@ const closeWindow = () => getCurrentWindow().close();
           v-for="task in filteredTodos" 
           :key="task.id" 
           :task="task" 
+          :isSelected="task.id === selectedTaskId"
+          @select="selectedTaskId = $event"
           @toggle="toggleComplete" 
           @delete="deleteTask" 
           @update-task="handleUpdateTask"
