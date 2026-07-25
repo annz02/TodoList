@@ -106,8 +106,11 @@ const displayStartTime = computed(() => {
   if (props.task.startTime) {
     return formatDateTime(props.task.startTime);
   }
-  if (props.task.timeText && props.task.timeText.includes(' - ')) {
-    return props.task.timeText.split(' - ')[0];
+  if (props.task.timeText) {
+    if (props.task.timeText.includes(' - ')) {
+      return props.task.timeText.split(' - ')[0];
+    }
+    return props.task.timeText;
   }
   return '';
 });
@@ -116,11 +119,8 @@ const displayDueDate = computed(() => {
   if (props.task.dueDate) {
     return formatDateTime(props.task.dueDate);
   }
-  if (props.task.timeText) {
-    if (props.task.timeText.includes(' - ')) {
-      return props.task.timeText.split(' - ')[1];
-    }
-    return props.task.timeText;
+  if (props.task.timeText && props.task.timeText.includes(' - ')) {
+    return props.task.timeText.split(' - ')[1];
   }
   return '';
 });
