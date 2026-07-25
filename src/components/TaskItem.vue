@@ -40,40 +40,22 @@ const handleSaveEdit = () => {
 
 <template>
   <div class="task-card" :class="{ completed: task.completed, 'is-editing': isEditing }">
-    <!-- View Mode -->
+    <!-- View Mode Card -->
     <template v-if="!isEditing">
-      <!-- 顶栏：复选框与状态 Badge -->
+      <!-- 顶栏：复选框、状态 Badge 与操作按钮 -->
       <div class="card-header">
-        <div class="checkbox-box" @click="emit('toggle', task)" title="标记完成状态">
-          <div class="checkbox" :class="{ checked: task.completed }">
-            <svg v-if="task.completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
+        <div class="header-left">
+          <div class="checkbox-box" @click="emit('toggle', task)" title="标记完成状态">
+            <div class="checkbox" :class="{ checked: task.completed }">
+              <svg v-if="task.completed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
           </div>
-        </div>
-
-        <span class="status-badge" :class="{ completed: task.completed }">
-          <span class="badge-dot"></span>
-          {{ task.completed ? '已完成' : '待处理' }}
-        </span>
-      </div>
-
-      <!-- 卡片主体：任务标题 -->
-      <div class="card-body">
-        <h3 class="task-title" :class="{ completed: task.completed }">{{ task.title }}</h3>
-      </div>
-
-      <!-- 底栏：时间与操作按钮组 -->
-      <div class="card-footer">
-        <div class="time-tag" v-if="task.timeText" :title="task.timeText">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-            <polyline points="12 6 12 12 16 14"></polyline>
-          </svg>
-          <span class="time-text">{{ task.timeText }}</span>
-        </div>
-        <div v-else class="time-tag empty">
-          <span>暂无时间</span>
+          <span class="status-badge" :class="{ completed: task.completed }">
+            <span class="badge-dot"></span>
+            {{ task.completed ? '已完成' : '进行中' }}
+          </span>
         </div>
 
         <div class="actions-group">
@@ -91,44 +73,74 @@ const handleSaveEdit = () => {
           </button>
         </div>
       </div>
+
+      <!-- 卡片主体：任务标题 -->
+      <div class="card-body">
+        <h3 class="task-title" :class="{ completed: task.completed }">{{ task.title }}</h3>
+      </div>
+
+      <!-- 底栏：时间标签 -->
+      <div class="card-footer">
+        <div class="time-tag" v-if="task.timeText" :title="task.timeText">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span class="time-text">{{ task.timeText }}</span>
+        </div>
+        <div v-else class="time-tag empty">
+          <span>无指定时间</span>
+        </div>
+      </div>
     </template>
 
-    <!-- Inline Edit Card Mode -->
+    <!-- Inline Edit Card Mode (大气分层表单重构) -->
     <template v-else>
-      <div class="inline-edit-container">
-        <!-- 任务名称输入框 -->
-        <div class="title-input-wrapper">
+      <div class="card-edit-form">
+        <div class="edit-header-row">
+          <span class="edit-badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            编辑任务
+          </span>
+        </div>
+
+        <!-- 任务名称 -->
+        <div class="form-item">
           <input 
             type="text" 
             v-model="editTitle" 
             placeholder="任务名称" 
-            class="inline-title-input"
+            class="card-edit-title-input"
             autofocus
             @keyup.enter="handleSaveEdit"
             @keyup.esc="cancelEditing"
           />
         </div>
 
-        <!-- 时间与操作控制组 -->
-        <div class="edit-footer">
-          <div class="time-pickers-group">
+        <!-- 时间选择双列区域 -->
+        <div class="form-time-row">
+          <div class="time-field-box">
+            <span class="field-label">开始时间</span>
             <DateTimePicker 
               v-model="editStartTime" 
               placeholder="开始时间" 
               iconType="start" 
             />
-            <span class="time-separator">至</span>
+          </div>
+          <div class="time-field-box">
+            <span class="field-label">结束时间</span>
             <DateTimePicker 
               v-model="editDueDate" 
               placeholder="结束时间" 
               iconType="end" 
             />
           </div>
+        </div>
 
-          <div class="edit-actions">
-            <button class="btn-cancel" @click="cancelEditing">取消</button>
-            <button class="btn-save" :disabled="!editTitle.trim()" @click="handleSaveEdit">保存</button>
-          </div>
+        <!-- 操作按钮行 -->
+        <div class="form-actions-row">
+          <button class="btn-cancel" @click="cancelEditing">取消</button>
+          <button class="btn-save" :disabled="!editTitle.trim()" @click="handleSaveEdit">保存修改</button>
         </div>
       </div>
     </template>
@@ -136,7 +148,7 @@ const handleSaveEdit = () => {
 </template>
 
 <style scoped>
-/* Bento Grid Task Card Style */
+/* Bento Grid Task Card Base */
 .task-card {
   background: var(--bg-main);
   border: 1px solid var(--border-color);
@@ -145,7 +157,7 @@ const handleSaveEdit = () => {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 140px;
+  min-height: 145px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
@@ -162,18 +174,18 @@ const handleSaveEdit = () => {
   background-color: var(--bg-sidebar);
 }
 
-.task-card.is-editing {
-  border-color: var(--primary-color);
-  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.15);
-  background-color: var(--bg-main);
-}
-
 /* Card Header */
 .card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .checkbox-box {
@@ -231,60 +243,6 @@ const handleSaveEdit = () => {
   background-color: currentColor;
 }
 
-/* Card Body */
-.card-body {
-  flex: 1;
-  margin-bottom: 14px;
-}
-
-.task-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-main);
-  margin: 0;
-  line-height: 1.4;
-  word-break: break-word;
-  transition: color 0.2s;
-}
-
-.task-title.completed {
-  text-decoration: line-through;
-  color: var(--text-muted);
-}
-
-/* Card Footer */
-.card-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-color);
-}
-
-.time-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: var(--text-muted);
-  background: var(--bg-sidebar);
-  padding: 4px 8px;
-  border-radius: 6px;
-  max-width: 170px;
-  overflow: hidden;
-}
-
-.time-tag.empty {
-  opacity: 0.6;
-}
-
-.time-text {
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
-}
-
 .actions-group {
   display: flex;
   align-items: center;
@@ -318,58 +276,147 @@ const handleSaveEdit = () => {
   color: var(--danger-color);
 }
 
-/* Inline Edit Card Container */
-.inline-edit-container {
+/* Card Body */
+.card-body {
+  flex: 1;
+  margin-bottom: 14px;
+}
+
+.task-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0;
+  line-height: 1.4;
+  word-break: break-word;
+  transition: color 0.2s;
+}
+
+.task-title.completed {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+/* Card Footer */
+.card-footer {
+  display: flex;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.time-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-sidebar);
+  padding: 4px 10px;
+  border-radius: 6px;
+  width: 100%;
+}
+
+.time-tag.empty {
+  opacity: 0.6;
+}
+
+.time-text {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+/* Card Edit Form Architecture */
+.task-card.is-editing {
+  border-color: var(--primary-color);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.16);
+  background-color: var(--bg-main);
+  grid-column: span 1;
+}
+
+.card-edit-form {
   display: flex;
   flex-direction: column;
   gap: 12px;
   width: 100%;
 }
 
-.inline-title-input {
+.edit-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.edit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--primary-color);
+  background: var(--primary-light);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.card-edit-title-input {
   width: 100%;
-  border: none;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 12px;
   outline: none;
-  background: transparent;
-  font-size: 15px;
+  background: var(--bg-sidebar);
+  font-size: 14px;
   font-weight: 500;
   color: var(--text-main);
   box-sizing: border-box;
+  transition: border-color 0.2s, background-color 0.2s;
 }
 
-.inline-title-input::placeholder {
+.card-edit-title-input:focus {
+  border-color: var(--primary-color);
+  background: var(--bg-main);
+}
+
+.card-edit-title-input::placeholder {
   color: var(--text-muted);
 }
 
-.edit-footer {
+.form-time-row {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  background: var(--bg-sidebar);
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
 }
 
-.time-pickers-group {
+.time-field-box {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex-wrap: nowrap;
-  white-space: nowrap;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.time-separator {
+.field-label {
   font-size: 12px;
   color: var(--text-muted);
-  flex-shrink: 0;
+  white-space: nowrap;
+  font-weight: 500;
 }
 
-.edit-actions {
+.form-actions-row {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  margin-top: 4px;
 }
 
 .btn-cancel, .btn-save {
-  padding: 4px 14px;
+  padding: 6px 14px;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
@@ -409,7 +456,8 @@ const handleSaveEdit = () => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-:global(.dark) .time-tag {
+:global(.dark) .time-tag,
+:global(.dark) .form-time-row {
   background-color: var(--bg-main);
 }
 </style>
