@@ -351,12 +351,14 @@ const handleSaveEdit = () => {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .time-separator {
   font-size: 12px;
   color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .edit-actions {
