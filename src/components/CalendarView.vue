@@ -610,15 +610,15 @@ const monthStats = computed(() => {
 }
 
 .pending-dot {
-  background-color: var(--primary-color);
+  background-color: #ef4444;
 }
 
 .completed-dot {
-  background-color: #a855f7;
+  background-color: #10b981;
 }
 
 .partial-dot {
-  background-color: #3b82f6;
+  background-color: #f59e0b;
 }
 
 /* Calendar Legend Footer */
