@@ -20,7 +20,7 @@ const emit = defineEmits<{
 const now = new Date();
 const currentYear = ref(now.getFullYear());
 const currentMonth = ref(now.getMonth()); // 0-11
-const viewType = ref<'month' | 'week' | 'list'>('month');
+const viewType = ref<'month' | 'list'>('month');
 
 const getTodayDateStr = () => {
   const y = now.getFullYear();
@@ -63,7 +63,7 @@ const nextMonth = () => {
   }
 };
 
-const handleViewTypeChange = (type: 'month' | 'week' | 'list') => {
+const handleViewTypeChange = (type: 'month' | 'list') => {
   if (type === 'list') {
     emit('switch-to-list');
   } else {
@@ -158,7 +158,7 @@ const calendarGridCells = computed(() => {
     });
   }
 
-  // Next month overflow to complete grid (up to 35 or 42 cells)
+  // Next month overflow to complete grid
   const remaining = 35 - cells.length > 0 ? 35 - cells.length : (42 - cells.length) % 7;
   for (let i = 1; i <= remaining; i++) {
     const dateObj = new Date(year, month + 1, i);
@@ -179,35 +179,6 @@ const calendarGridCells = computed(() => {
   return cells;
 });
 
-// Week View Days
-const weekGridCells = computed(() => {
-  let refDate = new Date(selectedDateStr.value || getTodayDateStr());
-  if (isNaN(refDate.getTime())) refDate = new Date();
-  
-  const dayOfWeek = refDate.getDay();
-  const startOfWeek = new Date(refDate);
-  startOfWeek.setDate(refDate.getDate() - dayOfWeek);
-
-  const cells: CalendarDayCell[] = [];
-  for (let i = 0; i < 7; i++) {
-    const dateObj = new Date(startOfWeek);
-    dateObj.setDate(startOfWeek.getDate() + i);
-    const dateStr = formatYYYYMMDD(dateObj);
-    const dayTasks = tasksByDateMap.value.get(dateStr) || [];
-
-    cells.push({
-      dateStr,
-      dayNumber: dateObj.getDate(),
-      isCurrentMonth: dateObj.getMonth() === currentMonth.value,
-      isToday: dateStr === getTodayDateStr(),
-      isSelected: dateStr === selectedDateStr.value,
-      tasks: dayTasks,
-      status: getDayStatus(dayTasks),
-    });
-  }
-  return cells;
-});
-
 function getDayStatus(tasks: Todo[]): 'pending' | 'completed' | 'partial' | 'none' {
   if (tasks.length === 0) return 'none';
   const completedCount = tasks.filter(t => t.completed).length;
@@ -215,8 +186,6 @@ function getDayStatus(tasks: Todo[]): 'pending' | 'completed' | 'partial' | 'non
   if (completedCount > 0) return 'partial';
   return 'pending';
 }
-
-const displayCells = computed(() => viewType.value === 'week' ? weekGridCells.value : calendarGridCells.value);
 
 const selectDate = (cell: CalendarDayCell) => {
   selectedDateStr.value = cell.dateStr;
@@ -291,13 +260,6 @@ const monthStats = computed(() => {
             </button>
             <button 
               class="pill-btn" 
-              :class="{ active: viewType === 'week' }" 
-              @click="handleViewTypeChange('week')"
-            >
-              周视图
-            </button>
-            <button 
-              class="pill-btn" 
               @click="handleViewTypeChange('list')"
             >
               列表视图
@@ -317,9 +279,9 @@ const monthStats = computed(() => {
         </div>
 
         <!-- Calendar Days Grid -->
-        <div class="calendar-days-grid" :class="{ 'week-grid': viewType === 'week' }">
+        <div class="calendar-days-grid">
           <div 
-            v-for="cell in displayCells" 
+            v-for="cell in calendarGridCells" 
             :key="cell.dateStr" 
             class="day-cell"
             :class="{ 
@@ -400,7 +362,7 @@ const monthStats = computed(() => {
         
         <!-- Card 1: 本月任务 -->
         <div class="stat-card">
-          <div class="stat-icon-box pink">
+          <div class="stat-icon-box theme-primary">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
           </div>
           <div class="stat-info">
@@ -502,8 +464,8 @@ const monthStats = computed(() => {
 }
 
 .today-btn:hover {
-  border-color: #ec4899;
-  color: #ec4899;
+  border-color: var(--primary-color);
+  color: var(--primary-color);
 }
 
 .nav-arrow-btn {
@@ -559,10 +521,10 @@ const monthStats = computed(() => {
 }
 
 .pill-btn.active {
-  background: #ec4899;
+  background: var(--primary-color);
   color: #ffffff;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(236, 72, 153, 0.35);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color) 35%, transparent);
 }
 
 /* Calendar Days Grid */
@@ -583,10 +545,6 @@ const monthStats = computed(() => {
   grid-template-columns: repeat(7, 1fr);
   gap: 6px;
   flex: 1;
-}
-
-.calendar-days-grid.week-grid {
-  grid-template-rows: 1fr;
 }
 
 .day-cell {
@@ -627,8 +585,8 @@ const monthStats = computed(() => {
 }
 
 .day-cell.is-selected .day-number-wrapper {
-  background: #ec4899;
-  box-shadow: 0 0 12px rgba(236, 72, 153, 0.5);
+  background: var(--primary-color);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--primary-color) 50%, transparent);
 }
 
 .day-cell.is-selected .day-number {
@@ -652,7 +610,7 @@ const monthStats = computed(() => {
 }
 
 .pending-dot {
-  background-color: #f43f5e;
+  background-color: var(--primary-color);
 }
 
 .completed-dot {
@@ -709,8 +667,8 @@ const monthStats = computed(() => {
 .task-count-badge {
   font-size: 12px;
   font-weight: 600;
-  color: #ec4899;
-  background-color: rgba(236, 72, 153, 0.15);
+  color: var(--primary-color);
+  background-color: var(--primary-light);
   padding: 3px 10px;
   border-radius: 12px;
 }
@@ -788,9 +746,9 @@ const monthStats = computed(() => {
   justify-content: center;
 }
 
-.stat-icon-box.pink {
-  background: rgba(244, 63, 94, 0.15);
-  color: #f43f5e;
+.stat-icon-box.theme-primary {
+  background: var(--primary-light);
+  color: var(--primary-color);
 }
 
 .stat-icon-box.purple {
