@@ -12,6 +12,7 @@ import Sidebar from './components/Sidebar.vue';
 import SettingsModal from './components/SettingsModal.vue';
 import TaskItem from './components/TaskItem.vue';
 import InlineTaskCard from './components/InlineTaskCard.vue';
+import CalendarView from './components/CalendarView.vue';
 import Toast from './components/Toast.vue';
 const { initTheme } = useTheme();
 const { showToast } = useToast();
@@ -424,9 +425,9 @@ const closeWindow = () => getCurrentWindow().close();
       <div class="header-left" data-tauri-drag-region style="flex-grow: 1; z-index: 10;">
         <div style="pointer-events: none;">
           <h1>
-            {{ activeCategory === 'today' ? '今天' : activeCategory === 'completed' ? '已完成' : '全部任务' }}
+            {{ activeCategory === 'today' ? '今天' : activeCategory === 'completed' ? '已完成' : activeCategory === 'calendar' ? '日历视图' : '全部任务' }}
           </h1>
-          <div class="date">{{ currentDate }}</div>
+          <div class="date">{{ activeCategory === 'calendar' ? '点击日期查看当天任务，合理规划每一天' : currentDate }}</div>
         </div>
       </div>
       <div class="header-right" style="z-index: 11;">
@@ -441,7 +442,18 @@ const closeWindow = () => getCurrentWindow().close();
       </div>
     </header>
 
-    <div class="task-list">
+    <CalendarView 
+      v-if="activeCategory === 'calendar'"
+      :todos="todos"
+      :selectedTaskId="selectedTaskId"
+      @select="selectedTaskId = $event"
+      @toggle="toggleComplete"
+      @delete="deleteTask"
+      @update-task="handleUpdateTask"
+      @switch-to-list="activeCategory = 'all'"
+    />
+
+    <div v-else class="task-list">
       <!-- Create Card Section when active -->
       <div v-if="showInlineCreate" class="category-group-section create-section">
         <div class="category-group-header">
