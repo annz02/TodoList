@@ -13,6 +13,7 @@ import SettingsModal from './components/SettingsModal.vue';
 import TaskItem from './components/TaskItem.vue';
 import InlineTaskCard from './components/InlineTaskCard.vue';
 import CalendarView from './components/CalendarView.vue';
+import AISummaryDrawer from './components/AISummaryDrawer.vue';
 import Toast from './components/Toast.vue';
 const { initTheme } = useTheme();
 const { showToast } = useToast();
@@ -23,6 +24,7 @@ const showInlineCreate = ref(false);
 const searchQuery = ref('');
 const activeCategory = ref('today');
 const showSettingsModal = ref(false);
+const showAIDrawer = ref(false);
 let checkInterval: number;
 
 const syncCurrentTime = () => {
@@ -516,6 +518,18 @@ const closeWindow = () => getCurrentWindow().close();
       </div>
     </div>
   </main>
+
+  <!-- Floating AI Action Button -->
+  <button class="ai-fab-btn" @click="showAIDrawer = true" title="AI 每日总结">
+    <span class="fab-sparkle">✨</span>
+    <span class="fab-text">AI 总结</span>
+  </button>
+
+  <AISummaryDrawer 
+    :isOpen="showAIDrawer"
+    :todos="todos"
+    @close="showAIDrawer = false"
+  />
 
   <SettingsModal :show="showSettingsModal" @close="showSettingsModal = false" />
   <Toast />
