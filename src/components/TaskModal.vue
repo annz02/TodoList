@@ -3,14 +3,15 @@ import { ref, watch } from 'vue';
 
 const props = defineProps<{ 
   show: boolean;
-  initialTask?: { title: string; dueDate?: string; notify?: boolean; priority?: number; reminderOption?: string; repeatOption?: string; lastNotifiedTime?: number | null } | null;
+  initialTask?: { title: string; category?: string; dueDate?: string; notify?: boolean; priority?: number; reminderOption?: string; repeatOption?: string; lastNotifiedTime?: number | null } | null;
 }>();
 const emit = defineEmits<{ 
   (e: 'close'): void;
-  (e: 'save', taskData: { title: string; dueDate: string; notify: boolean; reminderOption: string; repeatOption: string; lastNotifiedTime?: number | null }): void;
+  (e: 'save', taskData: { title: string; category?: string; dueDate: string; notify: boolean; reminderOption: string; repeatOption: string; lastNotifiedTime?: number | null }): void;
 }>();
 
 const title = ref('');
+const category = ref('');
 const titleError = ref('');
 const dateTimeError = ref('');
 const dateTime = ref('');
@@ -36,11 +37,13 @@ watch(() => props.show, (newVal) => {
     dateTimeError.value = '';
     if (props.initialTask) {
       title.value = props.initialTask.title;
+      category.value = props.initialTask.category || '';
       dateTime.value = props.initialTask.dueDate ? props.initialTask.dueDate.substring(0, 16) : '';
       reminder.value = props.initialTask.reminderOption || (props.initialTask.notify ? '15 分钟前' : '不提醒');
       repeat.value = props.initialTask.repeatOption || '不重复';
     } else {
       title.value = '';
+      category.value = '';
       dateTime.value = '';
       reminder.value = '15 分钟前';
     }
@@ -72,6 +75,7 @@ const handleSave = () => {
   
   emit('save', {
     title: title.value.trim(),
+    category: category.value.trim() || undefined,
     dueDate: dateTime.value,
     notify: reminder.value !== '不提醒',
     reminderOption: reminder.value,
@@ -113,6 +117,17 @@ const handleSave = () => {
             <span class="char-count">{{ title.length }}/100</span>
           </div>
           <span v-if="titleError" class="error-msg">{{ titleError }}</span>
+        </div>
+
+        <!-- Category Card -->
+        <div class="card category-card">
+          <div class="card-title">
+            <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+            <span>任务分类</span>
+          </div>
+          <div class="input-container">
+            <input type="text" v-model="category" maxlength="50" placeholder="请输入任务分类（如：工作、学习、生活）" @keyup.enter="handleSave" />
+          </div>
         </div>
 
         <!-- Date Card -->

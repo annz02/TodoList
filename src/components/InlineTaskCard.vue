@@ -3,11 +3,12 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import DateTimePicker from './DateTimePicker.vue';
 
 const emit = defineEmits<{
-  (e: 'save', data: { title: string; startTime: string; dueDate: string }): void;
+  (e: 'save', data: { title: string; category?: string; startTime: string; dueDate: string }): void;
   (e: 'cancel'): void;
 }>();
 
 const title = ref('');
+const category = ref('');
 const startTime = ref('');
 const dueDate = ref('');
 
@@ -26,10 +27,12 @@ const handleSave = () => {
   const finalStartTime = startTime.value || getCurrentNowISO();
   emit('save', {
     title: title.value.trim(),
+    category: category.value.trim() || undefined,
     startTime: finalStartTime,
     dueDate: dueDate.value
   });
   title.value = '';
+  category.value = '';
   startTime.value = '';
   dueDate.value = '';
 };
@@ -88,6 +91,21 @@ onUnmounted(() => {
     <!-- Details: Same structure -->
     <div class="card-details">
       <div class="time-row">
+        <svg class="calendar-icon purple" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+          <line x1="7" y1="7" x2="7.01" y2="7"></line>
+        </svg>
+        <span class="time-label">分类</span>
+        <input 
+          type="text" 
+          v-model="category" 
+          placeholder="输入分类..." 
+          class="category-input"
+          @keyup.enter="handleSave"
+        />
+      </div>
+
+      <div class="time-row">
         <svg class="calendar-icon blue" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
           <line x1="16" y1="2" x2="16" y2="6"></line>
@@ -142,8 +160,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  height: 156px;
-  min-height: 156px;
+  height: 190px;
+  min-height: 190px;
   box-shadow: 0 8px 20px -4px rgba(59, 130, 246, 0.15);
   box-sizing: border-box;
   animation: cardPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
@@ -268,6 +286,10 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+.calendar-icon.purple {
+  color: #8b5cf6;
+}
+
 .calendar-icon.blue {
   color: var(--primary-color);
 }
@@ -282,6 +304,26 @@ onUnmounted(() => {
   font-size: 14.5px;
   font-weight: 500;
   white-space: nowrap;
+}
+
+.category-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-main);
+  padding: 0;
+  height: 26px;
+  box-sizing: border-box;
+  flex: 1;
+  max-width: 200px;
+}
+
+.category-input::placeholder {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 13.5px;
 }
 
 :deep(.picker-trigger) {

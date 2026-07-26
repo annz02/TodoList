@@ -38,10 +38,10 @@ const loadTodos = async () => {
     console.error('Failed to load todos:', e);
     // Dummy data for testing if no rust backend available
     todos.value = [
-      { id: '1', title: '完成项目需求文档', completed: false, startTime: '2024-05-20T09:00', dueDate: '2024-05-25T18:00', timeText: '2024-05-20 09:00 - 2024-05-25 18:00' },
-      { id: '2', title: 'Vue组件开发', completed: true, startTime: '2024-05-20T14:00', dueDate: '2024-05-20T17:00', timeText: '14:00 - 17:00' },
-      { id: '3', title: '学习 Rust', completed: false, startTime: '2024-05-20T20:00', dueDate: '2024-05-20T22:00', timeText: '20:00 - 22:00' },
-      { id: '4', title: '去健身房', completed: false, startTime: '2024-05-21T19:00', dueDate: '2024-05-21T20:30', timeText: '明天 19:00' },
+      { id: '1', title: '完成项目需求文档', category: '工作', completed: false, startTime: '2024-05-20T09:00', dueDate: '2024-05-25T18:00', timeText: '2024-05-20 09:00 - 2024-05-25 18:00' },
+      { id: '2', title: 'Vue组件开发', category: '开发', completed: true, startTime: '2024-05-20T14:00', dueDate: '2024-05-20T17:00', timeText: '14:00 - 17:00' },
+      { id: '3', title: '学习 Rust', category: '学习', completed: false, startTime: '2024-05-20T20:00', dueDate: '2024-05-20T22:00', timeText: '20:00 - 22:00' },
+      { id: '4', title: '去健身房', category: '生活', completed: false, startTime: '2024-05-21T19:00', dueDate: '2024-05-21T20:30', timeText: '明天 19:00' },
     ];
   }
   updateTimeTexts();
@@ -335,6 +335,36 @@ const filteredTodos = computed(() => {
   return result;
 });
 
+const groupedTodos = computed(() => {
+  const list = filteredTodos.value;
+  if (list.length === 0) return [];
+
+  const groupsMap = new Map<string, Todo[]>();
+  
+  list.forEach(task => {
+    const cat = task.category?.trim() || '未分类';
+    if (!groupsMap.has(cat)) {
+      groupsMap.set(cat, []);
+    }
+    groupsMap.get(cat)!.push(task);
+  });
+
+  const result: { name: string; tasks: Todo[] }[] = [];
+  const unclassifiedTasks = groupsMap.get('未分类');
+  
+  groupsMap.forEach((tasks, name) => {
+    if (name !== '未分类') {
+      result.push({ name, tasks });
+    }
+  });
+
+  if (unclassifiedTasks && unclassifiedTasks.length > 0) {
+    result.push({ name: '未分类', tasks: unclassifiedTasks });
+  }
+
+  return result;
+});
+
 const todayCount = computed(() => todos.value.filter(t => isTodayTask(t)).length);
 const completedCount = computed(() => todos.value.filter(t => t.completed).length);
 const allCount = computed(() => todos.value.length);
@@ -345,10 +375,11 @@ const handleAddTaskClick = () => {
   showInlineCreate.value = true;
 };
 
-const handleInlineSave = (data: { title: string; startTime: string; dueDate: string }) => {
+const handleInlineSave = (data: { title: string; category?: string; startTime: string; dueDate: string }) => {
   const newTask: Todo = {
     id: Date.now().toString(),
     title: data.title,
+    category: data.category || undefined,
     completed: false,
     startTime: data.startTime || undefined,
     dueDate: data.dueDate || undefined,
@@ -411,24 +442,59 @@ const closeWindow = () => getCurrentWindow().close();
     </header>
 
     <div class="task-list">
-      <TransitionGroup name="list">
-        <TaskItem 
-          v-for="task in filteredTodos" 
-          :key="task.id" 
-          :task="task" 
-          :isSelected="task.id === selectedTaskId"
-          @select="selectedTaskId = $event"
-          @toggle="toggleComplete" 
-          @delete="deleteTask" 
-          @update-task="handleUpdateTask"
-        />
-      </TransitionGroup>
-      
-      <InlineTaskCard 
-        v-if="showInlineCreate" 
-        @save="handleInlineSave" 
-        @cancel="showInlineCreate = false" 
-      />
+      <!-- Create Card Section when active -->
+      <div v-if="showInlineCreate" class="category-group-section create-section">
+        <div class="category-group-header">
+          <div class="header-tag">
+            <svg class="header-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span class="group-title">新建任务</span>
+          </div>
+          <div class="group-divider"></div>
+        </div>
+        <div class="category-task-grid">
+          <InlineTaskCard 
+            @save="handleInlineSave" 
+            @cancel="showInlineCreate = false" 
+          />
+        </div>
+      </div>
+
+      <!-- Grouped Category Sections -->
+      <div 
+        v-for="group in groupedTodos" 
+        :key="group.name" 
+        class="category-group-section"
+      >
+        <div class="category-group-header">
+          <div class="header-tag">
+            <svg class="header-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+              <line x1="7" y1="7" x2="7.01" y2="7"></line>
+            </svg>
+            <span class="group-title">{{ group.name }}</span>
+            <span class="group-count">{{ group.tasks.length }}</span>
+          </div>
+          <div class="group-divider"></div>
+        </div>
+
+        <div class="category-task-grid">
+          <TransitionGroup name="list">
+            <TaskItem 
+              v-for="task in group.tasks" 
+              :key="task.id" 
+              :task="task" 
+              :isSelected="task.id === selectedTaskId"
+              @select="selectedTaskId = $event"
+              @toggle="toggleComplete" 
+              @delete="deleteTask" 
+              @update-task="handleUpdateTask"
+            />
+          </TransitionGroup>
+        </div>
+      </div>
 
       <div v-if="filteredTodos.length === 0 && !showInlineCreate" class="no-more">
         没有更多任务了

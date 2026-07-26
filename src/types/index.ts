@@ -3,6 +3,7 @@ export interface Todo {
   title: string;
   completed: boolean;
   timeText: string;
+  category?: string;
   startTime?: string;
   dueDate?: string;
   notify?: boolean;

@@ -13,11 +13,13 @@ const emit = defineEmits<{
 
 const isEditing = ref(false);
 const editTitle = ref('');
+const editCategory = ref('');
 const editStartTime = ref('');
 const editDueDate = ref('');
 
 const startEditing = () => {
   editTitle.value = props.task.title;
+  editCategory.value = props.task.category || '';
   editStartTime.value = props.task.startTime || '';
   editDueDate.value = props.task.dueDate || '';
   isEditing.value = true;
@@ -32,6 +34,7 @@ const handleSaveEdit = () => {
   emit('update-task', {
     ...props.task,
     title: editTitle.value.trim(),
+    category: editCategory.value.trim() || undefined,
     startTime: editStartTime.value || undefined,
     dueDate: editDueDate.value || undefined
   });
@@ -187,6 +190,16 @@ const displayDueDate = computed(() => {
     <div class="card-details">
       <template v-if="!isEditing">
         <div class="time-row">
+          <svg class="calendar-icon purple" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+            <line x1="7" y1="7" x2="7.01" y2="7"></line>
+          </svg>
+          <span class="time-label">分类</span>
+          <span v-if="task.category" class="category-tag">{{ task.category }}</span>
+          <span v-else class="time-value muted">未设分类</span>
+        </div>
+
+        <div class="time-row">
           <svg class="calendar-icon blue" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
             <line x1="16" y1="2" x2="16" y2="6"></line>
@@ -222,6 +235,21 @@ const displayDueDate = computed(() => {
       </template>
 
       <template v-else>
+        <div class="time-row">
+          <svg class="calendar-icon purple" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+            <line x1="7" y1="7" x2="7.01" y2="7"></line>
+          </svg>
+          <span class="time-label">分类</span>
+          <input 
+            type="text" 
+            v-model="editCategory" 
+            placeholder="输入分类..." 
+            class="category-input"
+            @keyup.enter="handleSaveEdit"
+          />
+        </div>
+
         <div class="time-row">
           <svg class="calendar-icon blue" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -278,8 +306,8 @@ const displayDueDate = computed(() => {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  height: 156px;
-  min-height: 156px;
+  height: 190px;
+  min-height: 190px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
@@ -461,6 +489,10 @@ const displayDueDate = computed(() => {
   flex-shrink: 0;
 }
 
+.calendar-icon.purple {
+  color: #8b5cf6;
+}
+
 .calendar-icon.blue {
   color: var(--primary-color);
 }
@@ -488,6 +520,42 @@ const displayDueDate = computed(() => {
   white-space: nowrap;
 }
 
+.time-value.muted {
+  color: var(--text-muted);
+}
+
+.category-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background-color: color-mix(in srgb, #8b5cf6 15%, transparent);
+  color: #8b5cf6;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.category-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-main);
+  padding: 0;
+  height: 26px;
+  box-sizing: border-box;
+  flex: 1;
+  max-width: 200px;
+}
+
+.category-input::placeholder {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 13.5px;
+}
+
 :deep(.picker-trigger) {
   padding: 2px 8px;
   height: 26px;
@@ -499,5 +567,10 @@ const displayDueDate = computed(() => {
 :global(.dark) .task-card {
   background-color: var(--bg-sidebar);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+:global(.dark) .category-tag {
+  background-color: rgba(139, 92, 246, 0.25);
+  color: #a78bfa;
 }
 </style>
