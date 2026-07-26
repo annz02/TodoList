@@ -2,10 +2,13 @@
 import { ref, computed } from 'vue';
 import type { Todo } from '../types';
 import TaskItem from './TaskItem.vue';
+import InlineTaskCard from './InlineTaskCard.vue';
+import { getCategoryStyle } from '../utils/categoryColor';
 
 const props = defineProps<{
   todos: Todo[];
   selectedTaskId: string | null;
+  showInlineCreate?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -13,6 +16,8 @@ const emit = defineEmits<{
   (e: 'toggle', task: Todo): void;
   (e: 'delete', id: string): void;
   (e: 'update-task', updated: Todo): void;
+  (e: 'save-inline', data: { title: string; category?: string; startTime: string; dueDate: string }): void;
+  (e: 'cancel-inline'): void;
   (e: 'switch-to-list'): void;
 }>();
 
@@ -206,64 +211,47 @@ const formattedSelectedDateTitle = computed(() => {
   const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
   return `${y}年 ${m}月 ${d}日 ${weekdays[dateObj.getDay()]}`;
 });
-
-// Month Stats (任务概览)
-const monthStats = computed(() => {
-  const y = currentYear.value;
-  const m = currentMonth.value;
-
-  const monthTasks = props.todos.filter(t => {
-    const dStr = getTaskDateStr(t);
-    if (!dStr) return false;
-    const [taskY, taskM] = dStr.split('-').map(Number);
-    return taskY === y && taskM === (m + 1);
-  });
-
-  const total = monthTasks.length;
-  const completed = monthTasks.filter(t => t.completed).length;
-  const pending = total - completed;
-  const rate = total > 0 ? ((completed / total) * 100).toFixed(1) : '0.0';
-
-  return { total, completed, pending, rate };
-});
 </script>
 
 <template>
   <div class="calendar-view-container">
     
-    <!-- Top Section: Calendar Grid & Selected Day Task List -->
     <div class="calendar-main-grid">
       
-      <!-- Left Panel: Calendar Month Grid -->
+      <!-- Left Panel: Full Height Calendar Month Grid -->
       <div class="calendar-left-panel">
         
         <!-- Header & Nav Bar -->
         <div class="calendar-toolbar">
           <div class="nav-controls">
             <button class="today-btn" @click="goToToday">今天</button>
-            <button class="nav-arrow-btn" @click="prevMonth" title="上一月">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
-            </button>
-            <button class="nav-arrow-btn" @click="nextMonth" title="下一月">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            </button>
+            <div class="arrow-group">
+              <button class="nav-arrow-btn" @click="prevMonth" title="上一月">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              </button>
+              <button class="nav-arrow-btn" @click="nextMonth" title="下一月">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+            </div>
             <span class="month-title">{{ currentYear }}年 {{ currentMonth + 1 }}月</span>
           </div>
 
-          <div class="view-switch-pills">
-            <button 
-              class="pill-btn" 
-              :class="{ active: viewType === 'month' }" 
-              @click="handleViewTypeChange('month')"
-            >
-              月视图
-            </button>
-            <button 
-              class="pill-btn" 
-              @click="handleViewTypeChange('list')"
-            >
-              列表视图
-            </button>
+          <div class="right-actions">
+            <div class="view-switch-pills">
+              <button 
+                class="pill-btn" 
+                :class="{ active: viewType === 'month' }" 
+                @click="handleViewTypeChange('month')"
+              >
+                月视图
+              </button>
+              <button 
+                class="pill-btn" 
+                @click="handleViewTypeChange('list')"
+              >
+                列表视图
+              </button>
+            </div>
           </div>
         </div>
 
@@ -278,7 +266,7 @@ const monthStats = computed(() => {
           <span>周六</span>
         </div>
 
-        <!-- Calendar Days Grid -->
+        <!-- Calendar Days Grid (Fills Left Panel Height) -->
         <div class="calendar-days-grid">
           <div 
             v-for="cell in calendarGridCells" 
@@ -291,15 +279,44 @@ const monthStats = computed(() => {
             }"
             @click="selectDate(cell)"
           >
-            <div class="day-number-wrapper">
-              <span class="day-number">{{ cell.dayNumber }}</span>
+            <div class="day-cell-top">
+              <div class="day-number-wrapper">
+                <span class="day-number">{{ cell.dayNumber }}</span>
+              </div>
+              <span v-if="cell.tasks.length > 0" class="mini-task-count">{{ cell.tasks.length }}项</span>
             </div>
 
-            <!-- Task Status Indicator Dots -->
-            <div class="status-dots" v-if="cell.status !== 'none'">
-              <span v-if="cell.status === 'pending'" class="dot pending-dot"></span>
-              <span v-else-if="cell.status === 'completed'" class="dot completed-dot"></span>
-              <span v-else-if="cell.status === 'partial'" class="dot partial-dot"></span>
+            <!-- Mini Task Pills Preview in Grid Cell -->
+            <div class="day-cell-content">
+              <template v-if="cell.tasks.length > 0">
+                <div 
+                  v-for="t in cell.tasks.slice(0, 2)" 
+                  :key="t.id" 
+                  class="mini-task-pill"
+                  :class="{ completed: t.completed }"
+                  :style="{
+                    '--pill-bg': getCategoryStyle(t.category).bg,
+                    '--pill-color': getCategoryStyle(t.category).text,
+                    '--pill-dark-bg': getCategoryStyle(t.category).darkBg,
+                    '--pill-dark-color': getCategoryStyle(t.category).darkText
+                  }"
+                >
+                  <span class="mini-task-dot"></span>
+                  <span class="mini-task-title">{{ t.title }}</span>
+                </div>
+                <div v-if="cell.tasks.length > 2" class="more-tasks-text">
+                  +{{ cell.tasks.length - 2 }} 更多
+                </div>
+              </template>
+            </div>
+
+            <!-- Status Indicator Dots -->
+            <div class="day-cell-bottom">
+              <div class="status-dots" v-if="cell.status !== 'none'">
+                <span v-if="cell.status === 'pending'" class="dot pending-dot"></span>
+                <span v-else-if="cell.status === 'completed'" class="dot completed-dot"></span>
+                <span v-else-if="cell.status === 'partial'" class="dot partial-dot"></span>
+              </div>
             </div>
           </div>
         </div>
@@ -319,16 +336,25 @@ const monthStats = computed(() => {
             <span>部分完成</span>
           </div>
         </div>
+
       </div>
 
-      <!-- Right Panel: Selected Day Task Schedule -->
+      <!-- Right Panel: Full Height Selected Day Schedule -->
       <div class="calendar-right-panel">
         <div class="panel-header">
-          <h3 class="selected-date-text">{{ formattedSelectedDateTitle }}</h3>
-          <span class="task-count-badge">{{ selectedDayTasks.length }} 个任务</span>
+          <div class="header-info">
+            <h3 class="selected-date-text">{{ formattedSelectedDateTitle }}</h3>
+            <span class="task-count-badge">{{ selectedDayTasks.length }} 个任务</span>
+          </div>
         </div>
 
         <div class="selected-tasks-list">
+          <InlineTaskCard 
+            v-if="showInlineCreate"
+            @save="emit('save-inline', $event)"
+            @cancel="emit('cancel-inline')"
+          />
+
           <TaskItem 
             v-for="task in selectedDayTasks" 
             :key="task.id" 
@@ -340,71 +366,19 @@ const monthStats = computed(() => {
             @update-task="emit('update-task', $event)"
           />
 
-          <div v-if="selectedDayTasks.length === 0" class="empty-day-state">
-            <svg class="empty-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <div v-if="!showInlineCreate && selectedDayTasks.length === 0" class="empty-day-state">
+            <svg class="empty-icon" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
               <line x1="16" y1="2" x2="16" y2="6"></line>
               <line x1="8" y1="2" x2="8" y2="6"></line>
               <line x1="3" y1="10" x2="21" y2="10"></line>
               <circle cx="12" cy="15" r="2"></circle>
             </svg>
-            <p>没有更多任务了，休息一下吧~</p>
+            <p>该日期暂无安排任务</p>
           </div>
         </div>
       </div>
 
-    </div>
-
-    <!-- Bottom Section: Task Statistics Overview (任务概览) -->
-    <div class="stats-overview-section">
-      <h3 class="overview-title">任务概览</h3>
-      <div class="stats-cards-grid">
-        
-        <!-- Card 1: 本月任务 -->
-        <div class="stat-card">
-          <div class="stat-icon-box theme-primary">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">本月任务</span>
-            <span class="stat-value">{{ monthStats.total }} 个</span>
-          </div>
-        </div>
-
-        <!-- Card 2: 已完成 -->
-        <div class="stat-card">
-          <div class="stat-icon-box purple">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">已完成</span>
-            <span class="stat-value">{{ monthStats.completed }} 个</span>
-          </div>
-        </div>
-
-        <!-- Card 3: 待完成 -->
-        <div class="stat-card">
-          <div class="stat-icon-box blue">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">待完成</span>
-            <span class="stat-value">{{ monthStats.pending }} 个</span>
-          </div>
-        </div>
-
-        <!-- Card 4: 完成率 -->
-        <div class="stat-card">
-          <div class="stat-icon-box green">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">完成率</span>
-            <span class="stat-value">{{ monthStats.rate }}%</span>
-          </div>
-        </div>
-
-      </div>
     </div>
 
   </div>
@@ -414,17 +388,20 @@ const monthStats = computed(() => {
 .calendar-view-container {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  height: calc(100vh - 110px);
   width: 100%;
-  padding-bottom: 24px;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
-/* Layout Grid */
+/* Layout Grid: Full Height 2-Column Split */
 .calendar-main-grid {
   display: grid;
-  grid-template-columns: 1.35fr 1fr;
+  grid-template-columns: 1.55fr 1fr;
   gap: 20px;
-  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
 }
 
 /* Left Panel: Calendar Grid */
@@ -432,23 +409,31 @@ const monthStats = computed(() => {
   background-color: var(--bg-sidebar);
   border: 1px solid var(--border-color);
   border-radius: 16px;
-  padding: 20px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
+  height: 100%;
+  min-height: 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
 }
 
 .calendar-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .nav-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+}
+
+.arrow-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .today-btn {
@@ -460,7 +445,7 @@ const monthStats = computed(() => {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .today-btn:hover {
@@ -479,7 +464,7 @@ const monthStats = computed(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .nav-arrow-btn:hover {
@@ -488,10 +473,10 @@ const monthStats = computed(() => {
 }
 
 .month-title {
-  font-size: 16px;
+  font-size: 16.5px;
   font-weight: 600;
   color: var(--text-main);
-  margin-left: 6px;
+  margin-left: 4px;
 }
 
 /* View Switch Pills */
@@ -513,7 +498,7 @@ const monthStats = computed(() => {
   font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .pill-btn:hover {
@@ -527,66 +512,84 @@ const monthStats = computed(() => {
   box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color) 35%, transparent);
 }
 
-/* Calendar Days Grid */
+/* Calendar Grid Header */
 .calendar-grid-header {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   text-align: center;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-secondary);
-  padding-bottom: 12px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border-color);
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
+/* Calendar Days Grid (Stretches Full Height) */
 .calendar-days-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: 1fr;
   gap: 6px;
   flex: 1;
+  min-height: 0;
 }
 
 .day-cell {
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 52px;
+  justify-content: space-between;
+  padding: 6px 8px;
   border-radius: 10px;
+  background-color: var(--bg-main);
+  border: 1px solid var(--border-color);
   cursor: pointer;
   transition: all 0.18s ease;
   user-select: none;
+  overflow: hidden;
 }
 
 .day-cell:hover {
-  background-color: var(--bg-main);
+  border-color: color-mix(in srgb, var(--primary-color) 40%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .day-cell.other-month {
   opacity: 0.35;
+  background-color: transparent;
+}
+
+.day-cell-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
 }
 
 .day-number-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   transition: all 0.2s ease;
 }
 
 .day-number {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--text-main);
 }
 
+.day-cell.is-selected {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 1px var(--primary-color);
+}
+
 .day-cell.is-selected .day-number-wrapper {
   background: var(--primary-color);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--primary-color) 50%, transparent);
 }
 
 .day-cell.is-selected .day-number {
@@ -594,13 +597,76 @@ const monthStats = computed(() => {
   font-weight: 600;
 }
 
+.mini-task-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* Mini Task Pills Preview */
+.day-cell-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 4px 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.mini-task-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  background-color: var(--pill-bg);
+  color: var(--pill-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.mini-task-pill.completed {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.mini-task-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: currentColor;
+  flex-shrink: 0;
+}
+
+.mini-task-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.more-tasks-text {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  padding-left: 2px;
+  font-weight: 500;
+}
+
 /* Status Indicator Dots */
+.day-cell-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 6px;
+}
+
 .status-dots {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-top: 4px;
-  height: 6px;
 }
 
 .dot {
@@ -626,10 +692,10 @@ const monthStats = computed(() => {
   display: flex;
   align-items: center;
   gap: 20px;
-  margin-top: 16px;
-  padding-top: 12px;
+  margin-top: 12px;
+  padding-top: 10px;
   border-top: 1px solid var(--border-color);
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -639,15 +705,17 @@ const monthStats = computed(() => {
   gap: 6px;
 }
 
-/* Right Panel: Selected Day Task List */
+/* Right Panel: Selected Day Task Schedule (Full Height) */
 .calendar-right-panel {
   background-color: var(--bg-sidebar);
   border: 1px solid var(--border-color);
   border-radius: 16px;
-  padding: 20px;
+  padding: 18px 20px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.03);
+  height: 100%;
+  min-height: 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
 }
 
 .panel-header {
@@ -655,6 +723,14 @@ const monthStats = computed(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.header-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .selected-date-text {
@@ -665,11 +741,11 @@ const monthStats = computed(() => {
 }
 
 .task-count-badge {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--primary-color);
   background-color: var(--primary-light);
-  padding: 3px 10px;
+  padding: 2px 9px;
   border-radius: 12px;
 }
 
@@ -678,8 +754,19 @@ const monthStats = computed(() => {
   flex-direction: column;
   gap: 12px;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  max-height: 420px;
+  padding-right: 4px;
+}
+
+/* Custom Scrollbar for Right Task List */
+.selected-tasks-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.selected-tasks-list::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
 }
 
 .empty-day-state {
@@ -687,13 +774,13 @@ const monthStats = computed(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 0;
+  flex: 1;
   color: var(--text-muted);
 }
 
 .empty-icon {
-  margin-bottom: 12px;
-  opacity: 0.5;
+  margin-bottom: 10px;
+  opacity: 0.4;
 }
 
 .empty-day-state p {
@@ -701,94 +788,20 @@ const monthStats = computed(() => {
   margin: 0;
 }
 
-/* Bottom Stats Overview Section */
-.stats-overview-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+/* Dark Mode Overrides */
+:global(.dark) .mini-task-pill {
+  background-color: var(--pill-dark-bg);
+  color: var(--pill-dark-color);
 }
 
-.overview-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-main);
-  margin: 0;
-}
-
-.stats-cards-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-}
-
-.stat-card {
-  background-color: var(--bg-sidebar);
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  padding: 16px 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  transition: all 0.2s ease;
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
-}
-
-.stat-icon-box {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.stat-icon-box.theme-primary {
-  background: var(--primary-light);
-  color: var(--primary-color);
-}
-
-.stat-icon-box.purple {
-  background: rgba(168, 85, 247, 0.15);
-  color: #a855f7;
-}
-
-.stat-icon-box.blue {
-  background: rgba(59, 130, 246, 0.15);
-  color: #3b82f6;
-}
-
-.stat-icon-box.green {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-}
-
-.stat-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 2px;
-}
-
-.stat-value {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-main);
-}
-
-/* Dark mode overrides */
 :global(.dark) .calendar-left-panel,
-:global(.dark) .calendar-right-panel,
-:global(.dark) .stat-card {
+:global(.dark) .calendar-right-panel {
   background-color: var(--bg-sidebar);
   border-color: var(--border-color);
+}
+
+:global(.dark) .day-cell {
+  background-color: var(--bg-sidebar);
 }
 
 :global(.dark) .day-cell:hover {

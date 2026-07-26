@@ -446,10 +446,13 @@ const closeWindow = () => getCurrentWindow().close();
       v-if="activeCategory === 'calendar'"
       :todos="todos"
       :selectedTaskId="selectedTaskId"
+      :showInlineCreate="showInlineCreate"
       @select="selectedTaskId = $event"
       @toggle="toggleComplete"
       @delete="deleteTask"
       @update-task="handleUpdateTask"
+      @save-inline="handleInlineSave"
+      @cancel-inline="showInlineCreate = false"
       @switch-to-list="activeCategory = 'all'"
     />
 

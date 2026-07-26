@@ -2,6 +2,10 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import DateTimePicker from './DateTimePicker.vue';
 
+const props = defineProps<{
+  initialStartTime?: string;
+}>();
+
 const emit = defineEmits<{
   (e: 'save', data: { title: string; category?: string; startTime: string; dueDate: string }): void;
   (e: 'cancel'): void;
@@ -9,7 +13,7 @@ const emit = defineEmits<{
 
 const title = ref('');
 const category = ref('');
-const startTime = ref('');
+const startTime = ref(props.initialStartTime || '');
 const dueDate = ref('');
 
 const getCurrentNowISO = () => {
