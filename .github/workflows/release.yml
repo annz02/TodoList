@@ -1,0 +1,138 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  create-draft:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create_release.outputs.id }}
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Validate version alignment
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "Tag version: $TAG_VERSION"
+
+          PKG_VER=$(node -p "require('./package.json').version")
+          CARGO_VER=$(grep '^version\s*=' src-tauri/Cargo.toml | head -1 | sed 's/.*=\s*"\(.*\)"/\1/')
+          TAURI_VER=$(node -p "JSON.parse(require('fs').readFileSync('src-tauri/tauri.conf.json','utf8')).version")
+
+          echo "package.json:     $PKG_VER"
+          echo "Cargo.toml:       $CARGO_VER"
+          echo "tauri.conf.json:  $TAURI_VER"
+
+          if [ "$PKG_VER" != "$TAG_VERSION" ]; then
+            echo "ERROR: package.json version ($PKG_VER) != tag ($TAG_VERSION)"
+            exit 1
+          fi
+          if [ "$CARGO_VER" != "$TAG_VERSION" ]; then
+            echo "ERROR: Cargo.toml version ($CARGO_VER) != tag ($TAG_VERSION)"
+            exit 1
+          fi
+          if [ "$TAURI_VER" != "$TAG_VERSION" ]; then
+            echo "ERROR: tauri.conf.json version ($TAURI_VER) != tag ($TAG_VERSION)"
+            exit 1
+          fi
+          echo "All version checks passed."
+
+      - name: Generate release notes
+        id: notes
+        shell: bash
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            echo "## Commits since $PREV_TAG" > /tmp/release_notes.md
+            git log "$PREV_TAG..HEAD" --pretty=format:'- %s (%h)' >> /tmp/release_notes.md
+          else
+            git log --pretty=format:'- %s (%h)' > /tmp/release_notes.md
+          fi
+          echo "notes_file=/tmp/release_notes.md" >> $GITHUB_OUTPUT
+
+      - name: Create draft release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: /tmp/release_notes.md
+          draft: true
+          prerelease: false
+
+  build:
+    needs: create-draft
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: ''
+            target: x86_64-pc-windows-msvc
+          - platform: macos-latest
+            args: '--target x86_64-apple-darwin'
+            target: x86_64-apple-darwin
+          - platform: macos-latest
+            args: '--target aarch64-apple-darwin'
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and upload with tauri-action
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: ${{ github.ref_name }}
+          releaseId: ${{ needs.create-draft.outputs.release_id }}
+          args: ${{ matrix.args }}
+
+  publish-release:
+    needs: [create-draft, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: false
