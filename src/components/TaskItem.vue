@@ -154,7 +154,7 @@ const displayDueDate = computed(() => {
           @keyup.enter="handleSaveEdit"
           @keyup.esc="cancelEditing"
         />
-        <h3 v-else class="card-title" :class="{ completed: task.completed }">{{ task.title }}</h3>
+        <h3 v-else class="card-title" :class="{ completed: task.completed }" :title="task.title">{{ task.title }}</h3>
       </div>
 
       <div class="header-actions">
@@ -195,7 +195,7 @@ const displayDueDate = computed(() => {
             <line x1="7" y1="7" x2="7.01" y2="7"></line>
           </svg>
           <span class="time-label">分类</span>
-          <span v-if="task.category" class="category-tag">{{ task.category }}</span>
+          <span v-if="task.category" class="category-tag" :title="task.category">{{ task.category }}</span>
           <span v-else class="time-value muted">未设分类</span>
         </div>
 

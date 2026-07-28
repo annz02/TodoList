@@ -290,10 +290,11 @@ const formattedSelectedDateTitle = computed(() => {
             <div class="day-cell-content">
               <template v-if="cell.tasks.length > 0">
                 <div 
-                  v-for="t in cell.tasks.slice(0, 2)" 
+                  v-for="t in cell.tasks.slice(0, 3)" 
                   :key="t.id" 
                   class="mini-task-pill"
                   :class="{ completed: t.completed }"
+                  :title="t.title"
                   :style="{
                     '--pill-bg': getCategoryStyle(t.category).bg,
                     '--pill-color': getCategoryStyle(t.category).text,
@@ -302,10 +303,10 @@ const formattedSelectedDateTitle = computed(() => {
                   }"
                 >
                   <span class="mini-task-dot"></span>
-                  <span class="mini-task-title">{{ t.title }}</span>
+                  <span class="mini-task-title" :title="t.title">{{ t.title }}</span>
                 </div>
-                <div v-if="cell.tasks.length > 2" class="more-tasks-text">
-                  +{{ cell.tasks.length - 2 }} 更多
+                <div v-if="cell.tasks.length > 3" class="more-tasks-text">
+                  +{{ cell.tasks.length - 3 }} 更多
                 </div>
               </template>
             </div>
@@ -388,7 +389,9 @@ const formattedSelectedDateTitle = computed(() => {
 .calendar-view-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 110px);
+  flex: 1;
+  min-height: 0;
+  height: 100%;
   width: 100%;
   overflow: hidden;
   box-sizing: border-box;
@@ -397,8 +400,8 @@ const formattedSelectedDateTitle = computed(() => {
 /* Layout Grid: Full Height 2-Column Split */
 .calendar-main-grid {
   display: grid;
-  grid-template-columns: 1.55fr 1fr;
-  gap: 20px;
+  grid-template-columns: 1fr 340px;
+  gap: 16px;
   flex: 1;
   min-height: 0;
   height: 100%;
@@ -409,7 +412,7 @@ const formattedSelectedDateTitle = computed(() => {
   background-color: var(--bg-sidebar);
   border: 1px solid var(--border-color);
   border-radius: 16px;
-  padding: 18px 20px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -421,7 +424,7 @@ const formattedSelectedDateTitle = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
   gap: 8px;
 }
@@ -442,9 +445,9 @@ const formattedSelectedDateTitle = computed(() => {
   background: var(--bg-main);
   border: 1px solid var(--border-color);
   color: var(--text-main);
-  padding: 5px 14px;
+  padding: 4px 12px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -459,8 +462,8 @@ const formattedSelectedDateTitle = computed(() => {
   background: var(--bg-main);
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -475,10 +478,11 @@ const formattedSelectedDateTitle = computed(() => {
 }
 
 .month-title {
-  font-size: 16.5px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-main);
   margin-left: 4px;
+  white-space: nowrap;
 }
 
 /* View Switch Pills */
@@ -495,9 +499,9 @@ const formattedSelectedDateTitle = computed(() => {
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  padding: 4px 12px;
+  padding: 3px 10px;
   border-radius: 8px;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -519,12 +523,12 @@ const formattedSelectedDateTitle = computed(() => {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   text-align: center;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text-secondary);
-  padding-bottom: 10px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--border-color);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 /* Calendar Days Grid (Stretches Full Height) */
@@ -532,7 +536,7 @@ const formattedSelectedDateTitle = computed(() => {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   grid-auto-rows: 1fr;
-  gap: 6px;
+  gap: 5px;
   flex: 1;
   min-height: 0;
 }
@@ -542,7 +546,7 @@ const formattedSelectedDateTitle = computed(() => {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 6px 8px;
+  padding: 5px 6px;
   border-radius: 10px;
   background-color: var(--bg-main);
   border: 1px solid var(--border-color);
@@ -567,16 +571,18 @@ const formattedSelectedDateTitle = computed(() => {
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  gap: 4px;
 }
 
 .day-number-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .day-number {
@@ -600,17 +606,19 @@ const formattedSelectedDateTitle = computed(() => {
 }
 
 .mini-task-count {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 500;
   color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* Mini Task Pills Preview */
 .day-cell-content {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  margin: 4px 0;
+  gap: 2px;
+  margin: 2px 0;
   flex: 1;
   overflow: hidden;
 }
@@ -619,9 +627,9 @@ const formattedSelectedDateTitle = computed(() => {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 6px;
+  padding: 1.5px 5px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 10.8px;
   font-weight: 500;
   background-color: var(--pill-bg);
   color: var(--pill-color);
@@ -648,6 +656,8 @@ const formattedSelectedDateTitle = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .more-tasks-text {
@@ -800,40 +810,38 @@ const formattedSelectedDateTitle = computed(() => {
   background-color: var(--bg-main);
 }
 
-/* Responsive Adaptations for Unmaximized / Small Window Sizes */
-@media (max-width: 1100px) {
-  .calendar-main-grid {
-    grid-template-columns: 1.25fr 1fr;
-    gap: 12px;
+/* Responsive Adaptations for Unmaximized / Multi-range Window Sizes */
+@media (max-height: 840px) {
+  .mini-task-pill:nth-child(n+3) {
+    display: none !important;
   }
-  .calendar-left-panel,
-  .calendar-right-panel {
-    padding: 14px 16px;
+  .more-tasks-text {
+    display: none !important;
   }
 }
 
-@media (max-height: 740px) {
+@media (max-height: 720px) {
   .day-cell-content {
-    display: none;
+    display: none !important;
   }
   .calendar-left-panel,
   .calendar-right-panel {
-    padding: 12px 14px;
+    padding: 10px 12px;
   }
   .calendar-toolbar {
-    margin-bottom: 8px;
-  }
-  .calendar-grid-header {
-    padding-bottom: 6px;
     margin-bottom: 6px;
   }
+  .calendar-grid-header {
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+  }
   .calendar-legend {
-    margin-top: 6px;
-    padding-top: 6px;
+    margin-top: 4px;
+    padding-top: 4px;
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1300px) {
   .calendar-view-container {
     height: auto;
     overflow-y: auto;
@@ -845,13 +853,11 @@ const formattedSelectedDateTitle = computed(() => {
     height: auto;
   }
   .calendar-left-panel {
-    height: 480px;
+    height: 500px;
+    min-height: 450px;
   }
   .calendar-right-panel {
     height: 380px;
-  }
-  .day-cell-content {
-    display: none;
   }
 }
 </style>
