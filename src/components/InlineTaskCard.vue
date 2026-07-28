@@ -7,12 +7,13 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'save', data: { title: string; category?: string; startTime: string; dueDate: string }): void;
+  (e: 'save', data: { title: string; category?: string; startTime: string; dueDate: string; gitUrl?: string }): void;
   (e: 'cancel'): void;
 }>();
 
 const title = ref('');
 const category = ref('');
+const gitUrl = ref('');
 const startTime = ref(props.initialStartTime || '');
 const dueDate = ref('');
 
@@ -32,11 +33,13 @@ const handleSave = () => {
   emit('save', {
     title: title.value.trim(),
     category: category.value.trim() || undefined,
+    gitUrl: gitUrl.value.trim() || undefined,
     startTime: finalStartTime,
     dueDate: dueDate.value
   });
   title.value = '';
   category.value = '';
+  gitUrl.value = '';
   startTime.value = '';
   dueDate.value = '';
 };
@@ -110,6 +113,23 @@ onUnmounted(() => {
       </div>
 
       <div class="time-row">
+        <svg class="calendar-icon git-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="6" y1="3" x2="6" y2="15"></line>
+          <circle cx="18" cy="6" r="3"></circle>
+          <circle cx="6" cy="18" r="3"></circle>
+          <path d="M18 9a9 9 0 0 1-9 9"></path>
+        </svg>
+        <span class="time-label">代码路径</span>
+        <input 
+          type="text" 
+          v-model="gitUrl" 
+          placeholder="输入代码路径..." 
+          class="git-input"
+          @keyup.enter="handleSave"
+        />
+      </div>
+
+      <div class="time-row">
         <svg class="calendar-icon blue" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
           <line x1="16" y1="2" x2="16" y2="6"></line>
@@ -164,8 +184,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  height: 190px;
   min-height: 190px;
+  height: auto;
   box-shadow: 0 8px 20px -4px rgba(59, 130, 246, 0.15);
   box-sizing: border-box;
   animation: cardPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
@@ -302,6 +322,10 @@ onUnmounted(() => {
   color: var(--primary-color);
 }
 
+.calendar-icon.git-icon {
+  color: #f97316;
+}
+
 .time-label {
   color: var(--text-secondary);
   margin-right: 20px;
@@ -310,7 +334,7 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.category-input {
+.category-input, .git-input {
   border: none;
   outline: none;
   background: transparent;
@@ -321,10 +345,10 @@ onUnmounted(() => {
   height: 26px;
   box-sizing: border-box;
   flex: 1;
-  max-width: 200px;
+  max-width: 220px;
 }
 
-.category-input::placeholder {
+.category-input::placeholder, .git-input::placeholder {
   color: var(--text-muted);
   font-weight: 400;
   font-size: 13.5px;

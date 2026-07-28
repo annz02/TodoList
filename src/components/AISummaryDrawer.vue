@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 import type { Todo } from '../types';
 
 const props = defineProps<{
@@ -35,24 +36,241 @@ const getTodayDateStr = () => {
   return `${y}-${m}-${day}`;
 };
 
-// Filter today's tasks
+// Robust date string converter (handles "7月27日 09:00", "今天 09:00", "2026-07-27T09:00", "2026/07/27", etc.)
+const getYYYYMMDDFromTaskDate = (dateStr?: string): string => {
+  if (!dateStr) return '';
+  const today = new Date();
+  if (dateStr.includes('今天')) {
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  if (dateStr.includes('明天')) {
+    const tm = new Date(today);
+    tm.setDate(tm.getDate() + 1);
+    const y = tm.getFullYear();
+    const m = String(tm.getMonth() + 1).padStart(2, '0');
+    const d = String(tm.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  // Match YYYY-MM-DD or YYYY/MM/DD or YYYY年MM月DD日
+  const ymdMatch = dateStr.match(/(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})/);
+  if (ymdMatch) {
+    const yyyy = ymdMatch[1];
+    const mm = ymdMatch[2].padStart(2, '0');
+    const dd = ymdMatch[3].padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  // Match M月D日 or MM-DD or MM/DD (e.g. "7月27日 09:00")
+  const mdMatch = dateStr.match(/(\d{1,2})[月/-](\d{1,2})/);
+  if (mdMatch) {
+    const yyyy = today.getFullYear();
+    const mm = mdMatch[1].padStart(2, '0');
+    const dd = mdMatch[2].padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  const parsed = new Date(dateStr);
+  if (!isNaN(parsed.getTime())) {
+    const yyyy = parsed.getFullYear();
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  return dateStr;
+};
+
+// Filter today's tasks (strictly tasks relevant to today, excluding future days > todayStr)
 const todayTasks = computed(() => {
   const todayStr = getTodayDateStr();
+
   return props.todos.filter(t => {
-    if (t.startTime && t.startTime.startsWith(todayStr)) return true;
-    if (t.dueDate && t.dueDate.startsWith(todayStr)) return true;
-    if (t.completedAt && t.completedAt === todayStr) return true;
+    const startYMD = getYYYYMMDDFromTaskDate(t.startTime);
+    const dueYMD = getYYYYMMDDFromTaskDate(t.dueDate);
+    const completedYMD = getYYYYMMDDFromTaskDate(t.completedAt) || t.completedAt;
+
+    // 1. 排除未来的任务（开始日期在今天之后）
+    if (startYMD && startYMD > todayStr) return false;
+
+    // 2. 已完成任务：必须是今天完成的（昨天的已完成任务排除）
+    if (t.completed) {
+      return completedYMD === todayStr;
+    }
+
+    // 3. 未完成任务：包含今天、今天有 Git 提交、或时间跨度覆盖今天
+    if (startYMD === todayStr || dueYMD === todayStr) return true;
+    if (gitCommitsMap.value.has(t.id)) return true;
+
+    if (!startYMD || startYMD <= todayStr) {
+      if (!dueYMD || dueYMD >= todayStr) return true;
+    }
+
     return false;
   });
 });
 
 const completedTodayTasks = computed(() => todayTasks.value.filter(t => t.completed));
-const pendingTodayTasks = computed(() => todayTasks.value.filter(t => !t.completed));
+const pendingTodayTasks = computed(() => todayTasks.value.filter(t => !t.completed && !t.gitUrl));
 const completionRate = computed(() => {
   const total = todayTasks.value.length;
   if (total === 0) return 0;
   return Math.round((completedTodayTasks.value.length / total) * 100);
 });
+
+interface GitFetchResult {
+  status: 'found' | 'empty' | 'error';
+  commits?: string;
+  msg?: string;
+}
+
+interface GenericGitUrlInfo {
+  baseUrl: string;
+  owner: string;
+  repo: string;
+}
+
+// Universal parser for Git Web URLs (GitHub, Gitea, Gogs, GitLab, etc.)
+const parseWebGitUrl = (url: string): GenericGitUrlInfo | null => {
+  const trimmed = url.trim();
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    return null;
+  }
+
+  try {
+    const u = new URL(trimmed);
+    const origin = u.origin;
+    const pathname = u.pathname.replace(/\.git$/i, '').replace(/\/+$/, '');
+    const segments = pathname.split('/').filter(Boolean);
+
+    let clean = [...segments];
+    const keyIdx = clean.findIndex(s => ['commits', 'src', 'branches', 'tree', 'blob'].includes(s.toLowerCase()));
+    if (keyIdx !== -1) {
+      clean = clean.slice(0, keyIdx);
+    }
+
+    if (clean.length >= 2) {
+      const repo = clean[clean.length - 1];
+      let owner = clean[clean.length - 2];
+      if (owner === 'repos' && clean.length >= 3) {
+        owner = clean[clean.length - 3];
+      }
+      return { baseUrl: origin, owner, repo };
+    }
+  } catch (e) {}
+  return null;
+};
+
+// Fetch commits from Web Git servers (GitHub, Gitea, Gogs, GitLab)
+const fetchWebGitCommits = async (webInfo: GenericGitUrlInfo, todayStr: string): Promise<GitFetchResult> => {
+  const sinceISO = `${todayStr}T00:00:00Z`;
+  const untilISO = `${todayStr}T23:59:59Z`;
+
+  // 1. GitHub API
+  if (webInfo.baseUrl.includes('github.com')) {
+    try {
+      const apiUrl = `https://api.github.com/repos/${webInfo.owner}/${webInfo.repo}/commits?since=${sinceISO}&until=${untilISO}`;
+      const res = await fetch(apiUrl, { headers: { 'Accept': 'application/vnd.github.v3+json' } });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const commitLines = data.map((item: any) => {
+            const msg = item.commit?.message?.split('\n')[0] || '';
+            const sha = item.sha?.substring(0, 7) || '';
+            const author = item.commit?.author?.name || '';
+            return `- ${msg} (${sha})${author ? ` [${author}]` : ''}`;
+          }).join('\n');
+          return { status: 'found', commits: commitLines };
+        }
+        return { status: 'empty', msg: '已成功连接 GitHub 仓库，但今日无 Commit 代码提交' };
+      }
+    } catch (e) {}
+  }
+
+  // 2. Gitea / Gogs REST API (e.g. http://192.168.9.5:3000/api/v1/repos/owner/repo/commits)
+  try {
+    const giteaApiUrl = `${webInfo.baseUrl}/api/v1/repos/${webInfo.owner}/${webInfo.repo}/commits?since=${sinceISO}&until=${untilISO}`;
+    const res = await fetch(giteaApiUrl, { headers: { 'Accept': 'application/json' } });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const commitLines = data.map((item: any) => {
+          const msg = item.commit?.message?.split('\n')[0] || item.title || '';
+          const sha = item.sha?.substring(0, 7) || item.id?.substring(0, 7) || '';
+          const author = item.commit?.author?.name || item.author?.username || '';
+          return `- ${msg} (${sha})${author ? ` [${author}]` : ''}`;
+        }).join('\n');
+        return { status: 'found', commits: commitLines };
+      }
+      return { status: 'empty', msg: '已成功连接私有 Gitea/Gogs 仓库，但今日无 Commit 提交' };
+    }
+  } catch (e) {}
+
+  // 3. GitLab REST API
+  try {
+    const projectPath = encodeURIComponent(`${webInfo.owner}/${webInfo.repo}`);
+    const gitlabApiUrl = `${webInfo.baseUrl}/api/v4/projects/${projectPath}/repository/commits?since=${sinceISO}&until=${untilISO}`;
+    const res = await fetch(gitlabApiUrl, { headers: { 'Accept': 'application/json' } });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const commitLines = data.map((item: any) => {
+          const msg = item.title || item.message?.split('\n')[0] || '';
+          const sha = item.id?.substring(0, 7) || '';
+          const author = item.author_name || '';
+          return `- ${msg} (${sha})${author ? ` [${author}]` : ''}`;
+        }).join('\n');
+        return { status: 'found', commits: commitLines };
+      }
+      return { status: 'empty', msg: '已成功连接私有 GitLab 仓库，但今日无 Commit 提交' };
+    }
+  } catch (e) {}
+
+  // 4. 若为私有内网网页且 API 需要 Token/登录鉴权
+  return {
+    status: 'error',
+    msg: `识别到私有网页链接。因内网 Git 网页需要登录鉴权，建议填入该项目在电脑上的本地文件夹路径（如 C:\\Users\\...\\${webInfo.repo}）即可免登录自动读取提交日志`
+  };
+};
+
+// Git commits cache map for tasks with gitUrl
+const gitCommitsMap = ref<Map<string, GitFetchResult>>(new Map());
+
+const fetchGitCommitsForTodayTasks = async () => {
+  const todayStr = getTodayDateStr();
+  const map = new Map<string, GitFetchResult>();
+
+  // 只要属于“今天”菜单栏下的任务且配置了代码路径，无论是否完成，直接进行 Git 信息读取
+  for (const task of todayTasks.value) {
+    if (!task.gitUrl || !task.gitUrl.trim()) continue;
+
+    const webInfo = parseWebGitUrl(task.gitUrl);
+    if (webInfo) {
+      const webResult = await fetchWebGitCommits(webInfo, todayStr);
+      map.set(task.id, webResult);
+    } else {
+      try {
+        const commits: string = await invoke('get_git_commits', {
+          repoPath: task.gitUrl.trim(),
+          dateStr: todayStr
+        });
+        if (commits && commits.trim()) {
+          map.set(task.id, { status: 'found', commits: commits.trim() });
+        } else {
+          map.set(task.id, { status: 'empty', msg: '已成功连接本地代码路径，但今日无 Commit 代码提交' });
+        }
+      } catch (err: any) {
+        const errorMsg = err?.message || String(err) || '路径不存在或不是本地有效的 Git 目录';
+        map.set(task.id, { status: 'error', msg: errorMsg });
+      }
+    }
+  }
+
+  gitCommitsMap.value = map;
+};
 
 // Generated summary text state
 const summaryText = ref('');
@@ -75,7 +293,7 @@ const getDynamicTaskDescription = (title: string, category: string): string => {
   if (lower.includes('修复') || lower.includes('bug') || lower.includes('排查')) {
     return '已定位并彻底修复相关问题，验证恢复正常。';
   }
-  return '已高效推进并完成该事项，成果已顺利闭环。';
+  return '已高效推进相关工作事项，成果已顺利落实。';
 };
 
 // Helper function to extract only "今日完成工作汇总" section
@@ -88,7 +306,7 @@ const extractTodayCompletedSummary = (text: string): string => {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (startIndex === -1) {
-      if (line.includes('一、') && line.includes('今日完成')) {
+      if (line.includes('一、') && (line.includes('今日完成') || line.includes('今日完成与推进'))) {
         startIndex = i;
       }
     } else {
@@ -107,14 +325,14 @@ const extractTodayCompletedSummary = (text: string): string => {
   return text.trim();
 };
 
-// Built-in Summary Generator matching screenshot PixPin_2026-07-26_20-09-34.png (3 Sections)
+// Built-in Summary Generator
 const generateBuiltInSummary = (): string => {
   const total = todayTasks.value.length;
 
   if (total === 0) {
     return `**📝 AI 工作日报**
 
-**一、 ✅ 今日完成工作汇总**
+**一、 ✅ 今日完成与推进工作汇总**
 
   Todolist 分类下今日暂无记录的关键任务。
 
@@ -131,29 +349,46 @@ const generateBuiltInSummary = (): string => {
   - 点击 **新建任务** 开启今日第一条工作规划。`;
   }
 
-  // Group completed tasks by category
-  const completedCategoryMap = new Map<string, Todo[]>();
-  completedTodayTasks.value.forEach(t => {
+  // Group completed tasks or tasks with configured Git repos by category
+  const workCategoryMap = new Map<string, Todo[]>();
+  const workTasks = todayTasks.value.filter(t => t.completed || t.gitUrl);
+
+  workTasks.forEach(t => {
     const cat = t.category || 'Todolist';
-    if (!completedCategoryMap.has(cat)) {
-      completedCategoryMap.set(cat, []);
+    if (!workCategoryMap.has(cat)) {
+      workCategoryMap.set(cat, []);
     }
-    completedCategoryMap.get(cat)!.push(t);
+    workCategoryMap.get(cat)!.push(t);
   });
 
   // Section 1 Content
   let section1Content = '';
-  if (completedTodayTasks.value.length > 0) {
-    section1Content = Array.from(completedCategoryMap.entries())
+  if (workTasks.length > 0) {
+    section1Content = Array.from(workCategoryMap.entries())
       .map(([cat, tasks]) => {
         const numText = tasks.length === 1 ? '一' : tasks.length === 2 ? '两' : String(tasks.length);
-        const intro = `${cat} 分类下完成以下${numText}项关键任务:`;
-        const items = tasks.map(t => `- ${t.title}: ${getDynamicTaskDescription(t.title, cat)}`).join('\n');
+        const intro = `${cat} 分类下完成/推进以下${numText}项关键任务:`;
+        const items = tasks.map(t => {
+          const statusTag = t.completed ? '' : ' [进行中]';
+          let line = `- ${t.title}${statusTag}: ${getDynamicTaskDescription(t.title, cat)}`;
+          if (t.gitUrl && t.gitUrl.trim()) {
+            const gitRes = gitCommitsMap.value.get(t.id);
+            if (gitRes?.status === 'found' && gitRes.commits) {
+              const formattedCommits = gitRes.commits.split('\n').map(c => `  ${c}`).join('\n');
+              line += `\n  - 🔧 代码提交记录 (${t.gitUrl}):\n${formattedCommits}`;
+            } else if (gitRes?.status === 'empty') {
+              line += `\n  - 💡 代码路径关联状态 (${t.gitUrl}): 已成功关联路径，今日未检索到 Commit 提交`;
+            } else if (gitRes?.status === 'error') {
+              line += `\n  - ⚠️ 代码路径关联异常 (${t.gitUrl}): ${gitRes.msg}`;
+            }
+          }
+          return line;
+        }).join('\n');
         return `${intro}\n${items}`;
       })
       .join('\n\n');
   } else {
-    section1Content = '（今日尚无已点击完成的任务事项）';
+    section1Content = '（今日尚无已完成或配置 Git 仓库的任务事项）';
   }
 
   // Group all today tasks by category
@@ -207,21 +442,37 @@ ${section3Content}`;
 
 // Online LLM API Generator (OpenAI / DeepSeek compatible)
 const generateOnlineLLMSummary = async (): Promise<string> => {
-  const prompt = `你是一位专业的 AI 工作助手。请根据用户今天的 TodoList 任务数据，写一份包含 3 个核心部分的【AI 工作日报】。不要在段落标题前添加任何 # 井号符号！标题与下文之间必须空一行换行！
+  const todayWorkTasks = todayTasks.value.filter(t => t.completed || t.gitUrl);
+  const workTaskSummaries = todayWorkTasks.map(t => {
+    let text = `${t.title} [分类: ${t.category || 'Todolist'}, 状态: ${t.completed ? '已完成' : '推进中/未完成'}]`;
+    if (t.gitUrl && t.gitUrl.trim()) {
+      const gitRes = gitCommitsMap.value.get(t.id);
+      if (gitRes?.status === 'found' && gitRes.commits) {
+        text += ` (配置的代码路径 ${t.gitUrl} 当日提交日志:\n${gitRes.commits})`;
+      } else if (gitRes?.status === 'empty') {
+        text += ` (已配置代码路径 ${t.gitUrl}，但今日未检索到提交日志)`;
+      } else if (gitRes?.status === 'error') {
+        text += ` (配置的代码路径 ${t.gitUrl} 读取异常: ${gitRes.msg})`;
+      }
+    }
+    return text;
+  }).join('; ');
+
+  const prompt = `你是一位专业的 AI 工作助手。请根据用户今天的 TodoList 任务数据及对应的 Git 代码提交记录（如有），写一份包含 3 个核心部分的【AI 工作日报】。不要在段落标题前添加任何 # 井号符号！标题与下文之间必须空一行换行！
 
 【今日任务数据】
 - 今日总任务数: ${todayTasks.value.length}
-- 已完成任务 (${completedTodayTasks.value.length}项): ${completedTodayTasks.value.map(t => `${t.title} [分类: ${t.category || 'Todolist'}]`).join('; ')}
-- 待完成任务 (${pendingTodayTasks.value.length}项): ${pendingTodayTasks.value.map(t => `${t.title} [分类: ${t.category || 'Todolist'}]`).join('; ')}
+- 今日完成与推进任务 (${todayWorkTasks.length}项): ${workTaskSummaries || '无'}
+- 待跟进任务 (${pendingTodayTasks.value.length}项): ${pendingTodayTasks.value.map(t => `${t.title} [分类: ${t.category || 'Todolist'}]`).join('; ') || '无'}
 - 完成率: ${completionRate.value}%
 
 【格式要求 (只包含一、二、三部分，请勿添加 # 井号)】
 **📝 AI 工作日报**
 
-**一、 ✅ 今日完成工作汇总**
+**一、 ✅ 今日完成与推进工作汇总**
 
 [分类名称] 分类下完成以下N项关键任务:
-- [任务名称]: (请结合该任务的具体名称与分类，由 AI 自由发散撰写一段具体、专业、有针对性的工作成果总结与说明，不要使用固定机械的模板化套话)
+- [任务名称]: (请结合该任务的具体名称、分类以及附带的 Git 提交日志（如有），由 AI 自由发散撰写一段具体、专业、有针对性的工作成果总结与说明，若有 Git 提交，请将其提炼融入工作总结中，不要使用固定机械的模板化套话)
 
 ---
 
@@ -264,6 +515,9 @@ const generateSummary = async () => {
   summaryText.value = '';
 
   try {
+    // 异步提取当天的 Git 提交记录
+    await fetchGitCommitsForTodayTasks();
+
     if (apiKey.value.trim()) {
       summaryText.value = await generateOnlineLLMSummary();
     } else {

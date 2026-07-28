@@ -14,12 +14,14 @@ const emit = defineEmits<{
 const isEditing = ref(false);
 const editTitle = ref('');
 const editCategory = ref('');
+const editGitUrl = ref('');
 const editStartTime = ref('');
 const editDueDate = ref('');
 
 const startEditing = () => {
   editTitle.value = props.task.title;
   editCategory.value = props.task.category || '';
+  editGitUrl.value = props.task.gitUrl || '';
   editStartTime.value = props.task.startTime || '';
   editDueDate.value = props.task.dueDate || '';
   isEditing.value = true;
@@ -35,6 +37,7 @@ const handleSaveEdit = () => {
     ...props.task,
     title: editTitle.value.trim(),
     category: editCategory.value.trim() || undefined,
+    gitUrl: editGitUrl.value.trim() || undefined,
     startTime: editStartTime.value || undefined,
     dueDate: editDueDate.value || undefined
   });
@@ -232,6 +235,17 @@ const displayDueDate = computed(() => {
           <span class="time-label">结束时间</span>
           <span class="time-value">{{ displayDueDate || '未设时间' }}</span>
         </div>
+
+        <div v-if="task.gitUrl" class="time-row git-row">
+          <svg class="calendar-icon git-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="6" y1="3" x2="6" y2="15"></line>
+            <circle cx="18" cy="6" r="3"></circle>
+            <circle cx="6" cy="18" r="3"></circle>
+            <path d="M18 9a9 9 0 0 1-9 9"></path>
+          </svg>
+          <span class="time-label">代码路径</span>
+          <span class="git-path-tag" :title="task.gitUrl">{{ task.gitUrl }}</span>
+        </div>
       </template>
 
       <template v-else>
@@ -246,6 +260,23 @@ const displayDueDate = computed(() => {
             v-model="editCategory" 
             placeholder="输入分类..." 
             class="category-input"
+            @keyup.enter="handleSaveEdit"
+          />
+        </div>
+
+        <div class="time-row">
+          <svg class="calendar-icon git-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="6" y1="3" x2="6" y2="15"></line>
+            <circle cx="18" cy="6" r="3"></circle>
+            <circle cx="6" cy="18" r="3"></circle>
+            <path d="M18 9a9 9 0 0 1-9 9"></path>
+          </svg>
+          <span class="time-label">代码路径</span>
+          <input 
+            type="text" 
+            v-model="editGitUrl" 
+            placeholder="输入代码路径..." 
+            class="git-input"
             @keyup.enter="handleSaveEdit"
           />
         </div>
@@ -306,8 +337,8 @@ const displayDueDate = computed(() => {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  height: 190px;
   min-height: 190px;
+  height: auto;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
@@ -503,6 +534,40 @@ const displayDueDate = computed(() => {
 
 .calendar-icon.gray {
   color: var(--text-muted);
+}
+
+.calendar-icon.git-icon {
+  color: #f97316;
+}
+
+.git-path-tag {
+  display: inline-block;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.git-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13.5px;
+  font-weight: 400;
+  color: var(--text-main);
+  padding: 0;
+  height: 26px;
+  box-sizing: border-box;
+  flex: 1;
+  max-width: 220px;
+}
+
+.git-input::placeholder {
+  color: var(--text-muted);
+  font-weight: 400;
+  font-size: 13px;
 }
 
 .time-label {

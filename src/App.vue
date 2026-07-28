@@ -379,11 +379,12 @@ const handleAddTaskClick = () => {
   showInlineCreate.value = true;
 };
 
-const handleInlineSave = (data: { title: string; category?: string; startTime: string; dueDate: string }) => {
+const handleInlineSave = (data: { title: string; category?: string; startTime: string; dueDate: string; gitUrl?: string }) => {
   const newTask: Todo = {
     id: Date.now().toString(),
     title: data.title,
     category: data.category || undefined,
+    gitUrl: data.gitUrl || undefined,
     completed: false,
     startTime: data.startTime || undefined,
     dueDate: data.dueDate || undefined,

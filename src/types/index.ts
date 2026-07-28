@@ -13,4 +13,5 @@ export interface Todo {
   repeatOption?: string;
   lastNotifiedTime?: number;
   completedAt?: string;
+  gitUrl?: string;
 }

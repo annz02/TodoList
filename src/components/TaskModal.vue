@@ -3,15 +3,16 @@ import { ref, watch } from 'vue';
 
 const props = defineProps<{ 
   show: boolean;
-  initialTask?: { title: string; category?: string; dueDate?: string; notify?: boolean; priority?: number; reminderOption?: string; repeatOption?: string; lastNotifiedTime?: number | null } | null;
+  initialTask?: { title: string; category?: string; dueDate?: string; notify?: boolean; priority?: number; reminderOption?: string; repeatOption?: string; lastNotifiedTime?: number | null; gitUrl?: string } | null;
 }>();
 const emit = defineEmits<{ 
   (e: 'close'): void;
-  (e: 'save', taskData: { title: string; category?: string; dueDate: string; notify: boolean; reminderOption: string; repeatOption: string; lastNotifiedTime?: number | null }): void;
+  (e: 'save', taskData: { title: string; category?: string; dueDate: string; notify: boolean; reminderOption: string; repeatOption: string; lastNotifiedTime?: number | null; gitUrl?: string }): void;
 }>();
 
 const title = ref('');
 const category = ref('');
+const gitUrl = ref('');
 const titleError = ref('');
 const dateTimeError = ref('');
 const dateTime = ref('');
@@ -38,12 +39,14 @@ watch(() => props.show, (newVal) => {
     if (props.initialTask) {
       title.value = props.initialTask.title;
       category.value = props.initialTask.category || '';
+      gitUrl.value = props.initialTask.gitUrl || '';
       dateTime.value = props.initialTask.dueDate ? props.initialTask.dueDate.substring(0, 16) : '';
       reminder.value = props.initialTask.reminderOption || (props.initialTask.notify ? '15 分钟前' : '不提醒');
       repeat.value = props.initialTask.repeatOption || '不重复';
     } else {
       title.value = '';
       category.value = '';
+      gitUrl.value = '';
       dateTime.value = '';
       reminder.value = '15 分钟前';
     }
@@ -76,6 +79,7 @@ const handleSave = () => {
   emit('save', {
     title: title.value.trim(),
     category: category.value.trim() || undefined,
+    gitUrl: gitUrl.value.trim() || undefined,
     dueDate: dateTime.value,
     notify: reminder.value !== '不提醒',
     reminderOption: reminder.value,
@@ -127,6 +131,22 @@ const handleSave = () => {
           </div>
           <div class="input-container">
             <input type="text" v-model="category" maxlength="50" placeholder="请输入任务分类（如：工作、学习、生活）" @keyup.enter="handleSave" />
+          </div>
+        </div>
+
+        <!-- Git Repository Card (Optional) -->
+        <div class="card git-card">
+          <div class="card-title">
+            <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="6" y1="3" x2="6" y2="15"></line>
+              <circle cx="18" cy="6" r="3"></circle>
+              <circle cx="6" cy="18" r="3"></circle>
+              <path d="M18 9a9 9 0 0 1-9 9"></path>
+            </svg>
+            <span>代码路径 <span class="optional-tag">（可选，用于 AI 日报提取 Commit）</span></span>
+          </div>
+          <div class="input-container">
+            <input type="text" v-model="gitUrl" placeholder="请输入本地代码目录路径（如 C:\Projects\...）" @keyup.enter="handleSave" />
           </div>
         </div>
 
@@ -289,6 +309,13 @@ const handleSave = () => {
 
 .card-title .required {
   color: var(--danger-color);
+}
+
+.optional-tag {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 2px;
 }
 
 .input-container {
