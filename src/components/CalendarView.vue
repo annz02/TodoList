@@ -761,16 +761,6 @@ const formattedSelectedDateTitle = computed(() => {
   padding-right: 4px;
 }
 
-/* Custom Scrollbar for Right Task List */
-.selected-tasks-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.selected-tasks-list::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 3px;
-}
-
 .empty-day-state {
   display: flex;
   flex-direction: column;

@@ -36,6 +36,50 @@ body {
   width: 100vw;
 }
 
+/* ==========================================================================
+   ✨ Universal Sleek Custom Scrollbars (全局极简高颜值胶囊滚动条)
+   ========================================================================== */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--border-color) 85%, var(--text-muted));
+  border-radius: 9999px;
+  border: 1.5px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.22s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary-color);
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox Support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background-color: #334155;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--primary-color);
+}
+
 /* Sidebar Styles */
 .sidebar {
   width: 240px;
@@ -342,15 +386,6 @@ body {
   gap: 1rem;
   align-items: start;
   align-content: start;
-}
-
-/* Scrollbar for Task List */
-.task-list::-webkit-scrollbar {
-  width: 6px;
-}
-.task-list::-webkit-scrollbar-thumb {
-  background-color: var(--border-color);
-  border-radius: 3px;
 }
 
 .task-right .action-btn {
