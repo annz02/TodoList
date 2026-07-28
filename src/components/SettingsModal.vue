@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { getVersion } from '@tauri-apps/api/app';
-import { check } from '@tauri-apps/plugin-updater';
+import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { useTheme } from '../composables/useTheme';
+import UpdateModal from './UpdateModal.vue';
 
 defineProps<{ show: boolean }>();
 const emit = defineEmits<{ (e: 'close'): void }>();
@@ -23,6 +24,13 @@ const appVersion = ref('');
 const isCheckingUpdate = ref(false);
 const updateStatusMsg = ref('');
 let updateStatusTimer: ReturnType<typeof setTimeout> | null = null;
+
+// 新版本更新弹窗状态
+const showUpdateModal = ref(false);
+const pendingUpdate = ref<Update | null>(null);
+const isDownloading = ref(false);
+const isInstalling = ref(false);
+const downloadPercent = ref(0);
 
 onMounted(async () => {
   try {
@@ -49,9 +57,8 @@ const handleCheckUpdate = async () => {
   try {
     const update = await check();
     if (update) {
-      updateStatusMsg.value = '发现新版本 v' + update.version + '，正在下载更新...';
-      await update.downloadAndInstall();
-      await relaunch();
+      pendingUpdate.value = update;
+      showUpdateModal.value = true;
     } else {
       updateStatusMsg.value = '当前已是最新版本';
       scheduleStatusClear();
@@ -70,6 +77,39 @@ const handleCheckUpdate = async () => {
     }
   } finally {
     isCheckingUpdate.value = false;
+  }
+};
+
+const handleConfirmUpdate = async () => {
+  if (!pendingUpdate.value) return;
+  isDownloading.value = true;
+  isInstalling.value = false;
+  downloadPercent.value = 0;
+
+  let downloaded = 0;
+  let contentLength = 0;
+
+  try {
+    await pendingUpdate.value.downloadAndInstall((event) => {
+      if (event.event === 'Started') {
+        contentLength = event.data.contentLength || 0;
+      } else if (event.event === 'Progress') {
+        downloaded += event.data.chunkLength;
+        if (contentLength > 0) {
+          downloadPercent.value = Math.round((downloaded / contentLength) * 100);
+        }
+      } else if (event.event === 'Finished') {
+        isInstalling.value = true;
+      }
+    });
+    await relaunch();
+  } catch (e: any) {
+    showUpdateModal.value = false;
+    updateStatusMsg.value = '下载更新失败: ' + (e.message || String(e));
+    scheduleStatusClear();
+  } finally {
+    isDownloading.value = false;
+    isInstalling.value = false;
   }
 };
 </script>
@@ -268,6 +308,20 @@ const handleCheckUpdate = async () => {
       </div>
     </div>
   </Transition>
+
+  <!-- 新版本更新对话框 -->
+  <UpdateModal
+    :show="showUpdateModal"
+    :version="pendingUpdate?.version || ''"
+    :current-version="appVersion"
+    :body="pendingUpdate?.body || ''"
+    :date="pendingUpdate?.date || ''"
+    :is-downloading="isDownloading"
+    :is-installing="isInstalling"
+    :download-percent="downloadPercent"
+    @confirm="handleConfirmUpdate"
+    @close="showUpdateModal = false"
+  />
 </template>
 
 <style scoped>
