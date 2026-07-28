@@ -325,6 +325,28 @@ const extractTodayCompletedSummary = (text: string): string => {
   return text.trim();
 };
 
+// Robust helper to strip commit type/scope prefix (e.g. "style(hydrologicalModel):") and trailing hash (e.g. "(93a77de)")
+const cleanCommitSubject = (commitLine: string): string => {
+  if (!commitLine) return '';
+  let text = commitLine.replace(/^[-*\d.\s]+/, '').trim();
+
+  // Strip trailing hash in format (abc1234) or (93a77de)
+  text = text.replace(/\s*[\(\[][a-f0-9]{7,40}[\)\]]\s*$/i, '').trim();
+
+  // Strip leading brackets e.g. [xxx] or (xxx)
+  text = text.replace(/^\[[^\]]+\]\s*/, '').replace(/^\([^)]+\)\s*/, '');
+
+  // Strip any prefix before colon (e.g. "style(hydrologicalModel):", "fix:", "style(drainageNetworkModel)：")
+  if (text.includes(':') || text.includes('：')) {
+    text = text.replace(/^[^:：]+[:：]\s*/, '');
+  }
+
+  // Strip leading brackets again if left over
+  text = text.replace(/^\[[^\]]+\]\s*/, '').replace(/^\([^)]+\)\s*/, '').trim();
+
+  return text;
+};
+
 // Built-in Summary Generator
 const generateBuiltInSummary = (): string => {
   const total = todayTasks.value.length;
@@ -370,17 +392,24 @@ const generateBuiltInSummary = (): string => {
         const intro = `${cat} 分类下完成/推进以下${numText}项关键任务:`;
         const items = tasks.map(t => {
           const statusTag = t.completed ? '' : ' [进行中]';
-          let line = `- ${t.title}${statusTag}: ${getDynamicTaskDescription(t.title, cat)}`;
+          let line = `- ${t.title}${statusTag}:`;
+
           if (t.gitUrl && t.gitUrl.trim()) {
             const gitRes = gitCommitsMap.value.get(t.id);
             if (gitRes?.status === 'found' && gitRes.commits) {
-              const formattedCommits = gitRes.commits.split('\n').map(c => `  ${c}`).join('\n');
-              line += `\n  - 🔧 代码提交记录 (${t.gitUrl}):\n${formattedCommits}`;
+              const commitLines = gitRes.commits.split('\n').filter(c => c.trim());
+              const numberedCommits = commitLines.map((c, idx) => {
+                const cleaned = cleanCommitSubject(c);
+                return `  ${idx + 1}. ${cleaned}`;
+              }).join('\n');
+              line += `\n${numberedCommits}`;
             } else if (gitRes?.status === 'empty') {
-              line += `\n  - 💡 代码路径关联状态 (${t.gitUrl}): 已成功关联路径，今日未检索到 Commit 提交`;
+              line += ` (已关联代码路径，今日无 Commit 提交)`;
             } else if (gitRes?.status === 'error') {
-              line += `\n  - ⚠️ 代码路径关联异常 (${t.gitUrl}): ${gitRes.msg}`;
+              line += ` (代码路径读取提示: ${gitRes.msg})`;
             }
+          } else {
+            line += ` ${getDynamicTaskDescription(t.title, cat)}`;
           }
           return line;
         }).join('\n');
@@ -388,7 +417,7 @@ const generateBuiltInSummary = (): string => {
       })
       .join('\n\n');
   } else {
-    section1Content = '（今日尚无已完成或配置 Git 仓库的任务事项）';
+    section1Content = '（今日尚无已完成或配置代码路径的任务事项）';
   }
 
   // Group all today tasks by category
@@ -423,7 +452,7 @@ const generateBuiltInSummary = (): string => {
 
   return `**📝 AI 工作日报**
 
-**一、 ✅ 今日完成工作汇总**
+**一、 ✅ 今日完成与推进工作汇总**
 
 ${section1Content}
 
@@ -448,7 +477,8 @@ const generateOnlineLLMSummary = async (): Promise<string> => {
     if (t.gitUrl && t.gitUrl.trim()) {
       const gitRes = gitCommitsMap.value.get(t.id);
       if (gitRes?.status === 'found' && gitRes.commits) {
-        text += ` (配置的代码路径 ${t.gitUrl} 当日提交日志:\n${gitRes.commits})`;
+        const cleanedCommits = gitRes.commits.split('\n').filter(c => c.trim()).map(c => cleanCommitSubject(c)).join('\n');
+        text += ` (配置的代码路径 ${t.gitUrl} 当日提交日志:\n${cleanedCommits})`;
       } else if (gitRes?.status === 'empty') {
         text += ` (已配置代码路径 ${t.gitUrl}，但今日未检索到提交日志)`;
       } else if (gitRes?.status === 'error') {
@@ -471,8 +501,11 @@ const generateOnlineLLMSummary = async (): Promise<string> => {
 
 **一、 ✅ 今日完成与推进工作汇总**
 
-[分类名称] 分类下完成以下N项关键任务:
-- [任务名称]: (请结合该任务的具体名称、分类以及附带的 Git 提交日志（如有），由 AI 自由发散撰写一段具体、专业、有针对性的工作成果总结与说明，若有 Git 提交，请将其提炼融入工作总结中，不要使用固定机械的模板化套话)
+[分类名称] 分类下完成/推进以下N项关键任务:
+- [任务名称]:
+  1. [若任务有 Git 代码提交记录，在此按 1. 2. 3. 序号逐条精准原样列出当天的提交说明内容，严禁在结尾追加任何 (无短Hash) 或短 Hash 等字符，也不要撰写任何描述性废话套话！]
+  2. [第 2 条 Commit 提交记录...]
+  (若任务无 Commit 提交，则简要总结成果说明)
 
 ---
 
@@ -507,7 +540,8 @@ const generateOnlineLLMSummary = async (): Promise<string> => {
   }
 
   const data = await response.json();
-  return data.choices[0]?.message?.content || generateBuiltInSummary();
+  const rawText = data.choices[0]?.message?.content || generateBuiltInSummary();
+  return rawText.replace(/\s*[\(\[][无無]短\s*hash[\)\]]/gi, '').trim();
 };
 
 const generateSummary = async () => {

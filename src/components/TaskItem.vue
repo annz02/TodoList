@@ -202,6 +202,17 @@ const displayDueDate = computed(() => {
           <span v-else class="time-value muted">未设分类</span>
         </div>
 
+        <div v-if="task.gitUrl" class="time-row git-row">
+          <svg class="calendar-icon git-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="6" y1="3" x2="6" y2="15"></line>
+            <circle cx="18" cy="6" r="3"></circle>
+            <circle cx="6" cy="18" r="3"></circle>
+            <path d="M18 9a9 9 0 0 1-9 9"></path>
+          </svg>
+          <span class="time-label">代码路径</span>
+          <span class="git-path-tag" :title="task.gitUrl">{{ task.gitUrl }}</span>
+        </div>
+
         <div class="time-row">
           <svg class="calendar-icon blue" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -234,17 +245,6 @@ const displayDueDate = computed(() => {
           </svg>
           <span class="time-label">结束时间</span>
           <span class="time-value">{{ displayDueDate || '未设时间' }}</span>
-        </div>
-
-        <div v-if="task.gitUrl" class="time-row git-row">
-          <svg class="calendar-icon git-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="6" y1="3" x2="6" y2="15"></line>
-            <circle cx="18" cy="6" r="3"></circle>
-            <circle cx="6" cy="18" r="3"></circle>
-            <path d="M18 9a9 9 0 0 1-9 9"></path>
-          </svg>
-          <span class="time-label">代码路径</span>
-          <span class="git-path-tag" :title="task.gitUrl">{{ task.gitUrl }}</span>
         </div>
       </template>
 
