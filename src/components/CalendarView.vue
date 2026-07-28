@@ -422,6 +422,8 @@ const formattedSelectedDateTitle = computed(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .nav-controls {
@@ -806,5 +808,60 @@ const formattedSelectedDateTitle = computed(() => {
 
 :global(.dark) .day-cell:hover {
   background-color: var(--bg-main);
+}
+
+/* Responsive Adaptations for Unmaximized / Small Window Sizes */
+@media (max-width: 1100px) {
+  .calendar-main-grid {
+    grid-template-columns: 1.25fr 1fr;
+    gap: 12px;
+  }
+  .calendar-left-panel,
+  .calendar-right-panel {
+    padding: 14px 16px;
+  }
+}
+
+@media (max-height: 740px) {
+  .day-cell-content {
+    display: none;
+  }
+  .calendar-left-panel,
+  .calendar-right-panel {
+    padding: 12px 14px;
+  }
+  .calendar-toolbar {
+    margin-bottom: 8px;
+  }
+  .calendar-grid-header {
+    padding-bottom: 6px;
+    margin-bottom: 6px;
+  }
+  .calendar-legend {
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+}
+
+@media (max-width: 900px) {
+  .calendar-view-container {
+    height: auto;
+    overflow-y: auto;
+  }
+  .calendar-main-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    gap: 16px;
+    height: auto;
+  }
+  .calendar-left-panel {
+    height: 480px;
+  }
+  .calendar-right-panel {
+    height: 380px;
+  }
+  .day-cell-content {
+    display: none;
+  }
 }
 </style>
