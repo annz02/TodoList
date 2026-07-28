@@ -3,7 +3,6 @@ import { ref, onMounted } from 'vue';
 import { getVersion } from '@tauri-apps/api/app';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
-import { useToast } from '../composables/useToast';
 import { useTheme } from '../composables/useTheme';
 
 defineProps<{ show: boolean }>();
@@ -20,9 +19,10 @@ const colorNames: Record<string, string> = {
   '#ec4899': '玫瑰粉',
 };
 
-const { showToast } = useToast();
 const appVersion = ref('');
 const isCheckingUpdate = ref(false);
+const updateStatusMsg = ref('');
+let updateStatusTimer: ReturnType<typeof setTimeout> | null = null;
 
 onMounted(async () => {
   try {
@@ -32,23 +32,41 @@ onMounted(async () => {
   }
 });
 
+const scheduleStatusClear = () => {
+  if (updateStatusTimer) clearTimeout(updateStatusTimer);
+  updateStatusTimer = setTimeout(() => {
+    updateStatusMsg.value = '';
+  }, 5000);
+};
+
 const handleCheckUpdate = async () => {
+  if (updateStatusTimer) {
+    clearTimeout(updateStatusTimer);
+    updateStatusTimer = null;
+  }
   isCheckingUpdate.value = true;
+  updateStatusMsg.value = '';
   try {
     const update = await check();
     if (update) {
-      showToast('发现新版本 v' + update.version + '，正在下载更新...', 3000);
+      updateStatusMsg.value = '发现新版本 v' + update.version + '，正在下载更新...';
       await update.downloadAndInstall();
       await relaunch();
     } else {
-      showToast('已是最新版本', 3000);
+      updateStatusMsg.value = '当前已是最新版本';
+      scheduleStatusClear();
     }
   } catch (e: any) {
     const msg = e.message || String(e);
     if (msg.includes('cancel')) {
-      showToast('更新已取消', 3000);
+      updateStatusMsg.value = '更新已取消';
+      scheduleStatusClear();
+    } else if (msg.includes('Could not fetch a valid release JSON') || msg.includes('404')) {
+      updateStatusMsg.value = '当前已是最新版本';
+      scheduleStatusClear();
     } else {
-      showToast('检查更新失败: ' + msg, 5000);
+      updateStatusMsg.value = '检查更新失败: ' + msg;
+      scheduleStatusClear();
     }
   } finally {
     isCheckingUpdate.value = false;
@@ -144,18 +162,19 @@ const handleCheckUpdate = async () => {
               </div>
 
               <!-- 版本与更新 -->
-              <div class='setting-card'>
-                <div class='setting-row'>
-                  <div class='setting-info'>
-                    <div class='info-text'>
-                      <span class='card-title'>版本更新</span>
-                      <span class='card-desc'>当前版本 v{{ appVersion }}</span>
+              <div class="setting-card update-card" :class="{ 'expanded': updateStatusMsg }">
+                <div class="setting-row">
+                  <div class="setting-info">
+                    <div class="info-text">
+                      <span class="card-title">版本更新</span>
+                      <span class="card-desc">当前版本 v{{ appVersion }}</span>
+                      <span v-if="updateStatusMsg" class="update-status-msg">{{ updateStatusMsg }}</span>
                     </div>
                   </div>
-                  <button type='button' class='update-check-btn' :disabled='isCheckingUpdate' @click.stop='handleCheckUpdate'>
-                    <svg v-if='!isCheckingUpdate' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
-                      <polyline points='23 4 23 10 17 10'></polyline>
-                      <path d='M20.49 15a9 9 0 1 1-2.12-9.36L23 10'></path>
+                  <button type="button" class="update-check-btn" :disabled="isCheckingUpdate" @click.stop="handleCheckUpdate">
+                    <svg v-if="!isCheckingUpdate" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="23 4 23 10 17 10"></polyline>
+                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
                     </svg>
                     <span>{{ isCheckingUpdate ? '检查中...' : '检查更新' }}</span>
                   </button>
@@ -584,5 +603,24 @@ const handleCheckUpdate = async () => {
 .update-check-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.general-panel .setting-card.update-card {
+  transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.general-panel .setting-card.update-card.expanded {
+  height: auto;
+  min-height: 82px;
+  padding: 12px 20px;
+}
+
+.update-status-msg {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary-color);
+  animation: fadeIn 0.25s ease-in-out;
 }
 </style>

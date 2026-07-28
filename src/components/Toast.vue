@@ -1,20 +1,47 @@
 <script setup lang="ts">
-import { useToast } from '../composables/useToast';
+import { useToast, type ToastType } from '../composables/useToast';
 const { toasts, removeToast } = useToast();
+
+const getIconClass = (type: ToastType) => {
+  return `toast-icon toast-icon-${type}`;
+};
+
+const getCardClass = (type: ToastType) => {
+  return `toast-card toast-card-${type}`;
+};
 </script>
 
 <template>
   <div class="toast-container">
     <TransitionGroup name="toast-anim">
-      <div v-for="t in toasts" :key="t.id" class="toast-card">
-        <div class="toast-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+      <div v-for="t in toasts" :key="t.id" :class="getCardClass(t.type)">
+        <div :class="getIconClass(t.type)">
+          <!-- Success Icon -->
+          <svg v-if="t.type === 'success'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+          </svg>
+          <!-- Warning Icon -->
+          <svg v-else-if="t.type === 'warning'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          <!-- Error Icon -->
+          <svg v-else-if="t.type === 'error'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="15" y1="9" x2="9" y2="15"></line>
+            <line x1="9" y1="9" x2="15" y2="15"></line>
+          </svg>
+          <!-- Info Icon (Default) -->
+          <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
           </svg>
         </div>
         <div class="toast-content">
-          <div class="toast-title">任务临期提醒</div>
+          <div class="toast-title">{{ t.title }}</div>
           <div class="toast-message">{{ t.message }}</div>
         </div>
         <div class="toast-close" @click="removeToast(t.id)">
@@ -39,25 +66,57 @@ const { toasts, removeToast } = useToast();
 
 .toast-card {
   pointer-events: auto;
-  background-color: var(--bg-main);
-  border: 1px solid var(--primary-color);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  background-color: var(--bg-main, #ffffff);
+  border: 1px solid var(--border-color, #e5e7eb);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
   border-radius: 12px;
-  padding: 16px;
-  width: 400px;
+  padding: 14px 16px;
+  width: 380px;
   display: flex;
   align-items: flex-start;
   gap: 12px;
   backdrop-filter: blur(8px);
 }
 
+/* Card Type Accents */
+.toast-card-info {
+  border-left: 4px solid #3b82f6;
+}
+
+.toast-card-success {
+  border-left: 4px solid #10b981;
+}
+
+.toast-card-warning {
+  border-left: 4px solid #f59e0b;
+}
+
+.toast-card-error {
+  border-left: 4px solid #ef4444;
+}
+
 .toast-icon {
-  color: var(--primary-color);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-top: 2px;
+}
+
+.toast-icon-info {
+  color: #3b82f6;
+}
+
+.toast-icon-success {
+  color: #10b981;
+}
+
+.toast-icon-warning {
+  color: #f59e0b;
+}
+
+.toast-icon-error {
+  color: #ef4444;
 }
 
 .toast-content {
@@ -66,20 +125,21 @@ const { toasts, removeToast } = useToast();
 
 .toast-title {
   font-weight: 600;
-  font-size: 0.95rem;
-  color: var(--text-main);
-  margin-bottom: 4px;
+  font-size: 0.92rem;
+  color: var(--text-main, #1f2937);
+  margin-bottom: 3px;
 }
 
 .toast-message {
   font-size: 0.85rem;
-  color: var(--text-secondary);
-  line-height: 1.4;
+  color: var(--text-secondary, #4b5563);
+  line-height: 1.45;
+  word-break: break-word;
 }
 
 .toast-close {
   cursor: pointer;
-  color: var(--text-muted);
+  color: var(--text-muted, #9ca3af);
   transition: color 0.2s;
   padding: 2px;
   margin-top: -2px;
@@ -87,7 +147,7 @@ const { toasts, removeToast } = useToast();
 }
 
 .toast-close:hover {
-  color: var(--danger-color);
+  color: var(--danger-color, #ef4444);
 }
 
 /* Animations */

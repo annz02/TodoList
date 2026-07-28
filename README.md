@@ -85,7 +85,6 @@ npm run tauri build
 
 ---
 
-
 ## 📦 下载安装
 
 到 [Releases](https://github.com/annz02/TodoList/releases) 页面下载最新版安装包：
@@ -97,56 +96,3 @@ npm run tauri build
 首次打开 macOS 版本时，由于未进行 Apple 开发者签名和公证，系统会提示无法验证开发者。请在「系统设置 > 隐私与安全性」中点击「仍要打开」。
 
 Windows 版可能会显示 SmartScreen 警告，点击「更多信息 > 仍要运行」即可。
-
-## 🔄 发布新版本
-
-1. **更新版本号**：统一修改以下三个文件的版本号为 `X.Y.Z`：
-   - `package.json` → `version`
-   - `src-tauri/tauri.conf.json` → `version`
-   - `src-tauri/Cargo.toml` → `version`
-
-2. **提交版本更新**：
-   ```bash
-   git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml
-   git commit -m "chore: bump version to vX.Y.Z"
-   ```
-
-3. **推送标签触发构建**：
-   ```bash
-   git tag vX.Y.Z
-   git push origin main
-   git push origin vX.Y.Z
-   ```
-
-4. CI 会自动验证版本号一致性、构建所有平台的安装包，并发布 GitHub Release。
-
-5. 应用内「检查更新」功能从 `latest.json` (托管在 GitHub Releases) 获取更新信息。
-
-## 🔐 必需 Secrets
-
-| Secret 名称 | 说明 |
-|---|---|
-| `TAURI_PRIVATE_KEY` | Tauri updater 私钥，用于对更新包签名 |
-| `TAURI_KEY_PASSWORD` | 私钥加密密码 |
-
-生成密钥对：
-```bash
-npx tauri signer generate -w ~/.tauri/todolist.key
-```
-会输出公钥（填入 `tauri.conf.json > plugins > updater > pubkey`）和私钥（存入 GitHub Secrets）。
-
-## ⚠️ 关于代码签名
-
-当前版本未配置代码签名：
-- **Windows**：可能显示 SmartScreen 警告
-- **macOS**：显示无法验证开发者提示，需手动允许运行
-
-配置代码签名和公证是后续优化项。
-
-## ↩️ 版本回滚
-
-如需回滚，直接安装旧版本的安装包即可覆盖当前版本。旧版本安装包可在 [Releases](https://github.com/annz02/TodoList/releases) 页面找到。
-
-## 📄 许可证
-
-[MIT License](LICENSE)

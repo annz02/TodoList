@@ -135,7 +135,7 @@ onMounted(() => {
           const msg = diffMinutes <= 0 ? `「${task.title}」已经到期啦！` : `「${task.title}」还有不到 ${minsStr} 分钟就要到期啦！`;
           
           // 1. In-app Toast and Sound
-          showToast(msg);
+          showToast(msg, 8000, '任务临期提醒', 'warning');
           playBeep();
           
           // 2. System Desktop Notification

@@ -1,16 +1,25 @@
 import { ref } from 'vue';
 
+export type ToastType = 'info' | 'success' | 'warning' | 'error';
+
 export interface ToastItem {
   id: string;
+  title: string;
   message: string;
+  type: ToastType;
 }
 
 const toasts = ref<ToastItem[]>([]);
 
 export function useToast() {
-  const showToast = (message: string, duration = 8000) => {
+  const showToast = (
+    message: string,
+    duration = 5000,
+    title = '系统提示',
+    type: ToastType = 'info'
+  ) => {
     const id = Date.now().toString() + Math.random().toString(36).substring(2);
-    toasts.value.push({ id, message });
+    toasts.value.push({ id, title, message, type });
     
     if (duration > 0) {
       setTimeout(() => {
