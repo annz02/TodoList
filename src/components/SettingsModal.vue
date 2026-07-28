@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, shallowRef, onMounted } from 'vue';
 import { getVersion } from '@tauri-apps/api/app';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
@@ -27,7 +27,7 @@ let updateStatusTimer: ReturnType<typeof setTimeout> | null = null;
 
 // 新版本更新弹窗状态
 const showUpdateModal = ref(false);
-const pendingUpdate = ref<Update | null>(null);
+const pendingUpdate = shallowRef<Update | null>(null);
 const isDownloading = ref(false);
 const isInstalling = ref(false);
 const downloadPercent = ref(0);
@@ -36,7 +36,7 @@ onMounted(async () => {
   try {
     appVersion.value = await getVersion();
   } catch {
-    appVersion.value = '0.1.5';
+    appVersion.value = '0.1.6';
   }
 });
 
