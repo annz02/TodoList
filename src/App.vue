@@ -89,6 +89,7 @@ const playBeep = () => {
 onMounted(() => {
   loadTodos();
   initTheme();
+  getCurrentWindow().maximize();
 
   window.addEventListener('focus', syncCurrentTime);
   document.addEventListener('visibilitychange', syncCurrentTime);
