@@ -120,6 +120,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: ${{ github.ref_name }}
           releaseId: ${{ needs.create-draft.outputs.release_id }}
+          includeUpdaterJson: true
           args: ${{ matrix.args }}
 
   publish-release:

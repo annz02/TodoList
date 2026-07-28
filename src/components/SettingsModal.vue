@@ -69,7 +69,7 @@ const handleCheckUpdate = async () => {
       updateStatusMsg.value = '更新已取消';
       scheduleStatusClear();
     } else if (msg.includes('Could not fetch a valid release JSON') || msg.includes('404')) {
-      updateStatusMsg.value = '当前已是最新版本';
+      updateStatusMsg.value = '更新元数据暂未就绪或无法获取';
       scheduleStatusClear();
     } else {
       updateStatusMsg.value = '检查更新失败: ' + msg;
