@@ -120,13 +120,20 @@ fn get_git_commits(repo_path: String, date_str: String) -> Result<String, String
     Ok(commits)
 }
 
+#[tauri::command]
+fn select_folder() -> Option<String> {
+    let folder = rfd::FileDialog::new().pick_folder();
+    folder.map(|p| p.to_string_lossy().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
     .plugin(tauri_plugin_process::init())
-    .invoke_handler(tauri::generate_handler![save_todos, load_todos, save_settings, load_settings, get_git_commits])
+    .invoke_handler(tauri::generate_handler![save_todos, load_todos, save_settings, load_settings, get_git_commits, select_folder])
+
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(

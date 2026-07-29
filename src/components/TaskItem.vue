@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import type { Todo } from '../types';
 import DateTimePicker from './DateTimePicker.vue';
+import { selectFolder } from '../utils/filePicker';
 
 const props = defineProps<{ task: Todo; isSelected?: boolean }>();
 const emit = defineEmits<{
@@ -17,6 +18,14 @@ const editCategory = ref('');
 const editGitUrl = ref('');
 const editStartTime = ref('');
 const editDueDate = ref('');
+
+const handleSelectFolder = async () => {
+  const folder = await selectFolder();
+  if (folder) {
+    editGitUrl.value = folder;
+  }
+};
+
 
 const startEditing = () => {
   editTitle.value = props.task.title;
@@ -272,13 +281,17 @@ const displayDueDate = computed(() => {
             <path d="M18 9a9 9 0 0 1-9 9"></path>
           </svg>
           <span class="time-label">代码路径</span>
-          <input 
-            type="text" 
-            v-model="editGitUrl" 
-            placeholder="输入代码路径..." 
-            class="git-input"
-            @keyup.enter="handleSaveEdit"
-          />
+          <div class="folder-select-trigger" @click="handleSelectFolder" :title="editGitUrl || '选择代码路径'">
+            <span class="folder-path" :class="{ placeholder: !editGitUrl }">
+              {{ editGitUrl || '选择代码路径' }}
+            </span>
+            <button v-if="editGitUrl" type="button" class="clear-folder-btn" @click.stop="editGitUrl = ''" title="清除路径">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div class="time-row">
@@ -568,6 +581,59 @@ const displayDueDate = computed(() => {
   color: var(--text-muted);
   font-weight: 400;
   font-size: 13px;
+}
+
+.folder-select-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  height: 26px;
+  box-sizing: border-box;
+  max-width: 220px;
+  flex: 1;
+  transition: background-color 0.2s;
+  user-select: none;
+}
+
+.folder-select-trigger:hover {
+  background-color: var(--bg-sidebar);
+}
+
+.folder-path {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.folder-path.placeholder {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.clear-folder-btn {
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.clear-folder-btn:hover {
+  color: var(--danger-color);
+  background-color: rgba(239, 68, 68, 0.15);
 }
 
 .time-label {
