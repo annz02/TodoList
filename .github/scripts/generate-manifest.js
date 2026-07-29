@@ -32,17 +32,30 @@ async function main() {
   for (const asset of assets) {
     console.log(`Checking asset: ${asset.name}`);
     if (asset.name.endsWith('.sig')) {
-      const contentRes = await fetch(asset.url, {
+      let contentRes = await fetch(asset.url, {
         headers: {
           'Authorization': `token ${token}`,
           'Accept': 'application/octet-stream',
           'User-Agent': 'Node-Updater-Generator'
-        }
+        },
+        redirect: 'manual'
       });
+
+      if (contentRes.status === 302 || contentRes.status === 307) {
+        const redirectUrl = contentRes.headers.get('location');
+        contentRes = await fetch(redirectUrl, {
+          headers: {
+            'User-Agent': 'Node-Updater-Generator'
+          }
+        });
+      }
+
       if (contentRes.ok) {
         const sigText = (await contentRes.text()).trim();
         sigMap[asset.name] = sigText;
-        console.log(`Successfully loaded signature for ${asset.name}`);
+        console.log(`Successfully loaded signature for ${asset.name} (${sigText.length} bytes)`);
+      } else {
+        console.warn(`Failed to fetch signature content for ${asset.name}: HTTP ${contentRes.status}`);
       }
     }
   }
@@ -55,6 +68,10 @@ async function main() {
   const winSig = winKey ? sigMap[winKey] : '';
   const macX64Sig = macX64Key ? sigMap[macX64Key] : '';
   const macArmSig = macArmKey ? sigMap[macArmKey] : '';
+
+  if (!winSig) {
+    throw new Error(`CRITICAL: Windows signature is missing! Check if TAURI_SIGNING_PRIVATE_KEY secret is configured in GitHub Secrets.`);
+  }
 
   const manifest = {
     version: ver,
