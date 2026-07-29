@@ -375,9 +375,13 @@ const allCount = computed(() => todos.value.length);
 
 const currentDate = computed(() => nowRef.value.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }));
 
-const handleAddTaskClick = () => {
+const initialStartTime = ref<string | undefined>(undefined);
+
+const handleAddTaskClick = (startTime?: string) => {
+  initialStartTime.value = typeof startTime === 'string' ? startTime : undefined;
   showInlineCreate.value = true;
 };
+
 
 const handleInlineSave = (data: { title: string; category?: string; startTime: string; dueDate: string; gitUrl?: string }) => {
   const newTask: Todo = {
@@ -407,7 +411,7 @@ const closeWindow = () => getCurrentWindow().close();
     :todayCount="todayCount"
     :completedCount="completedCount"
     :allCount="allCount"
-    @add-task-clicked="handleAddTaskClick"
+    @add-task-clicked="() => handleAddTaskClick()"
     @open-settings="showSettingsModal = true"
   />
 
@@ -439,7 +443,7 @@ const closeWindow = () => getCurrentWindow().close();
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" placeholder="搜索任务..." v-model="searchQuery">
         </div>
-        <button class="new-task-btn" @click="handleAddTaskClick">
+        <button class="new-task-btn" @click="() => handleAddTaskClick()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
           新建任务
         </button>
@@ -451,12 +455,14 @@ const closeWindow = () => getCurrentWindow().close();
       :todos="todos"
       :selectedTaskId="selectedTaskId"
       :showInlineCreate="showInlineCreate"
+      :initialStartTime="initialStartTime"
       @select="selectedTaskId = $event"
       @toggle="toggleComplete"
       @delete="deleteTask"
       @update-task="handleUpdateTask"
       @save-inline="handleInlineSave"
       @cancel-inline="showInlineCreate = false"
+      @open-create="handleAddTaskClick"
       @switch-to-list="activeCategory = 'all'"
     />
 
@@ -475,6 +481,7 @@ const closeWindow = () => getCurrentWindow().close();
         </div>
         <div class="category-task-grid">
           <InlineTaskCard 
+            :initialStartTime="initialStartTime"
             @save="handleInlineSave" 
             @cancel="showInlineCreate = false" 
           />

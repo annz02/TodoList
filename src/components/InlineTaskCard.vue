@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
 import DateTimePicker from './DateTimePicker.vue';
 import { selectFolder } from '../utils/filePicker';
 
@@ -17,6 +17,13 @@ const category = ref('');
 const gitUrl = ref('');
 const startTime = ref(props.initialStartTime || '');
 const dueDate = ref('');
+
+watch(() => props.initialStartTime, (newVal) => {
+  if (newVal) {
+    startTime.value = newVal;
+  }
+});
+
 
 const handleSelectFolder = async () => {
   const folder = await selectFolder();

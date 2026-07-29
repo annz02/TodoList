@@ -9,6 +9,7 @@ const props = defineProps<{
   todos: Todo[];
   selectedTaskId: string | null;
   showInlineCreate?: boolean;
+  initialStartTime?: string;
 }>();
 
 const emit = defineEmits<{
@@ -18,8 +19,15 @@ const emit = defineEmits<{
   (e: 'update-task', updated: Todo): void;
   (e: 'save-inline', data: { title: string; category?: string; startTime: string; dueDate: string }): void;
   (e: 'cancel-inline'): void;
+  (e: 'open-create', initialStartTime?: string): void;
   (e: 'switch-to-list'): void;
 }>();
+
+const handleDayDblClick = (cell: CalendarDayCell) => {
+  selectDate(cell);
+  emit('open-create');
+};
+
 
 // Date State
 const now = new Date();
@@ -193,6 +201,11 @@ function getDayStatus(tasks: Todo[]): 'pending' | 'completed' | 'partial' | 'non
 }
 
 const selectDate = (cell: CalendarDayCell) => {
+  if (selectedDateStr.value !== cell.dateStr) {
+    if (props.showInlineCreate) {
+      emit('cancel-inline');
+    }
+  }
   selectedDateStr.value = cell.dateStr;
   const [y, m] = cell.dateStr.split('-').map(Number);
   currentYear.value = y;
@@ -278,6 +291,7 @@ const formattedSelectedDateTitle = computed(() => {
               'is-today': cell.isToday 
             }"
             @click="selectDate(cell)"
+            @dblclick="handleDayDblClick(cell)"
           >
             <div class="day-cell-top">
               <div class="day-number-wrapper">
@@ -352,6 +366,7 @@ const formattedSelectedDateTitle = computed(() => {
         <div class="selected-tasks-list">
           <InlineTaskCard 
             v-if="showInlineCreate"
+            :initialStartTime="initialStartTime"
             @save="emit('save-inline', $event)"
             @cancel="emit('cancel-inline')"
           />
