@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Todo } from './types';
@@ -263,6 +263,17 @@ const isTodayTask = (t: Todo) => {
   const todayStr = getYYYYMMDD(nowRef.value);
   const startDateStr = getYYYYMMDD(t.startTime);
   const dueDateStr = getYYYYMMDD(t.dueDate);
+
+  if (startDateStr && dueDateStr && startDateStr <= dueDateStr) {
+    if (todayStr >= startDateStr && todayStr <= dueDateStr) {
+      return true;
+    }
+    if (todayStr > dueDateStr) {
+      return !t.completed;
+    }
+    return false;
+  }
+
   const primaryDateStr = startDateStr || dueDateStr;
 
   if (primaryDateStr) {
@@ -378,9 +389,16 @@ const currentDate = computed(() => nowRef.value.toLocaleDateString('zh-CN', { ye
 const initialStartTime = ref<string | undefined>(undefined);
 
 const handleAddTaskClick = (startTime?: string) => {
+  if (activeCategory.value === 'completed') {
+    activeCategory.value = 'all';
+  }
   initialStartTime.value = typeof startTime === 'string' ? startTime : undefined;
   showInlineCreate.value = true;
 };
+
+watch(activeCategory, () => {
+  showInlineCreate.value = false;
+});
 
 
 const handleInlineSave = (data: { title: string; category?: string; startTime: string; dueDate: string; gitUrl?: string }) => {
@@ -468,7 +486,7 @@ const closeWindow = () => getCurrentWindow().close();
 
     <div v-else class="task-list">
       <!-- Create Card Section when active -->
-      <div v-if="showInlineCreate" class="category-group-section create-section">
+      <div v-if="showInlineCreate && activeCategory !== 'completed'" class="category-group-section create-section">
         <div class="category-group-header">
           <div class="header-tag">
             <svg class="header-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
