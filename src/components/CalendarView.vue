@@ -404,16 +404,10 @@ const weekdaysHeader = [
 
     </div>
 
-    <!-- Modal 1: Create New Task Modal (Uses standard InlineTaskCard inside framed modal wrapper) -->
+    <!-- Modal 1: Create New Task Modal (Direct Card on Backdrop) -->
     <Transition name="fade">
       <div v-if="showInlineCreate" class="task-card-modal-backdrop" @click="emit('cancel-inline')">
-        <div class="modal-card-wrapper create-card-wrapper" @click.stop>
-          <div class="modal-card-header">
-            <span class="modal-card-title">新建任务</span>
-            <button class="modal-close-btn" @click="emit('cancel-inline')" title="关闭">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-            </button>
-          </div>
+        <div class="direct-card-container" @click.stop>
           <InlineTaskCard 
             :initialStartTime="initialStartTime"
             @save="emit('save-inline', $event)"
@@ -423,17 +417,10 @@ const weekdaysHeader = [
       </div>
     </Transition>
 
-    <!-- Modal 2: Task Detail & Edit Modal (Uses standard TaskItem component with full card styling) -->
+    <!-- Modal 2: Task Detail & Edit Modal (Direct Card on Backdrop) -->
     <Transition name="fade">
       <div v-if="activeTaskDetail" class="task-card-modal-backdrop" @click="activeTaskDetail = null">
-        <div class="modal-card-wrapper task-item-dialog" @click.stop>
-          <div class="modal-card-header">
-            <span class="modal-card-title">任务卡片详情</span>
-            <button class="modal-close-btn" @click="activeTaskDetail = null" title="关闭">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-            </button>
-          </div>
-          
+        <div class="direct-card-container" @click.stop>
           <TaskItem 
             :task="activeTaskDetail"
             :isSelected="true"
@@ -881,6 +868,14 @@ const weekdaysHeader = [
   align-items: center;
   justify-content: center;
   padding: 20px;
+}
+
+.direct-card-container {
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  box-sizing: border-box;
+  animation: popIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .modal-card-wrapper {
