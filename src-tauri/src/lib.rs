@@ -128,6 +128,14 @@ fn select_folder() -> Option<String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  #[cfg(target_os = "windows")]
+  {
+    std::env::set_var(
+      "WEBVIEW2_ADDITIONAL_BROWSER_ARGS",
+      "--disable-gpu-shader-disk-cache --disable-component-update --enable-features=MemorySaverMode --num-raster-threads=1",
+    );
+  }
+
   tauri::Builder::default()
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_updater::Builder::new().build())

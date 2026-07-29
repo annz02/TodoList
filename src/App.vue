@@ -81,6 +81,10 @@ const playBeep = () => {
       osc.start(startTime);
       osc.stop(startTime + 0.4);
     });
+
+    setTimeout(() => {
+      ctx.close().catch(() => {});
+    }, 1000);
   } catch (e) {
     console.warn('Audio play failed', e);
   }
