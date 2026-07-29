@@ -12,27 +12,6 @@ const emit = defineEmits<{
   (e: 'cancel'): void;
 }>();
 
-const title = ref('');
-const category = ref('');
-const gitUrl = ref('');
-const startTime = ref(props.initialStartTime || '');
-const dueDate = ref('');
-
-watch(() => props.initialStartTime, (newVal) => {
-  if (newVal) {
-    startTime.value = newVal;
-  }
-});
-
-
-const handleSelectFolder = async () => {
-  const folder = await selectFolder();
-  if (folder) {
-    gitUrl.value = folder;
-  }
-};
-
-
 const getCurrentNowISO = () => {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -41,6 +20,27 @@ const getCurrentNowISO = () => {
   const hh = String(d.getHours()).padStart(2, '0');
   const min = String(d.getMinutes()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+};
+
+const title = ref('');
+const category = ref('');
+const gitUrl = ref('');
+const startTime = ref(props.initialStartTime || getCurrentNowISO());
+const dueDate = ref('');
+
+watch(() => props.initialStartTime, (newVal) => {
+  if (newVal) {
+    startTime.value = newVal;
+  } else {
+    startTime.value = getCurrentNowISO();
+  }
+});
+
+const handleSelectFolder = async () => {
+  const folder = await selectFolder();
+  if (folder) {
+    gitUrl.value = folder;
+  }
 };
 
 const handleSave = () => {
@@ -56,7 +56,7 @@ const handleSave = () => {
   title.value = '';
   category.value = '';
   gitUrl.value = '';
-  startTime.value = '';
+  startTime.value = getCurrentNowISO();
   dueDate.value = '';
 };
 
@@ -203,9 +203,13 @@ onUnmounted(() => {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  min-height: 190px;
+  justify-content: flex-start;
+  gap: 12px;
+  min-height: auto;
   height: auto;
+  flex-shrink: 0;
+  width: 100%;
+  overflow: hidden;
   box-shadow: 0 8px 20px -4px rgba(59, 130, 246, 0.15);
   box-sizing: border-box;
   animation: cardPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
@@ -307,7 +311,7 @@ onUnmounted(() => {
 
 .card-divider {
   border-top: 1px dashed var(--border-color);
-  margin: 12px 0;
+  margin: 0;
   width: 100%;
 }
 
@@ -323,6 +327,9 @@ onUnmounted(() => {
   font-size: 14.5px;
   line-height: 1.5;
   height: 26px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .calendar-icon {
@@ -348,10 +355,11 @@ onUnmounted(() => {
 
 .time-label {
   color: var(--text-secondary);
-  margin-right: 20px;
+  margin-right: 12px;
   font-size: 14.5px;
   font-weight: 500;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .category-input, .git-input {
@@ -365,6 +373,7 @@ onUnmounted(() => {
   height: 26px;
   box-sizing: border-box;
   flex: 1;
+  min-width: 0;
   max-width: 220px;
 }
 
@@ -383,7 +392,7 @@ onUnmounted(() => {
   border-radius: 6px;
   height: 26px;
   box-sizing: border-box;
-  max-width: 220px;
+  min-width: 0;
   flex: 1;
   transition: background-color 0.2s;
   user-select: none;
@@ -401,6 +410,7 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
+  min-width: 0;
 }
 
 .folder-path.placeholder {

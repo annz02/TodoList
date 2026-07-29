@@ -236,7 +236,7 @@ const displayDueDate = computed(() => {
             <circle cx="16" cy="18" r="0.8" fill="currentColor"></circle>
           </svg>
           <span class="time-label">开始时间</span>
-          <span class="time-value">{{ displayStartTime || '未设时间' }}</span>
+          <span class="time-value" :title="displayStartTime || '未设时间'">{{ displayStartTime || '未设时间' }}</span>
         </div>
 
         <div class="time-row">
@@ -253,7 +253,7 @@ const displayDueDate = computed(() => {
             <circle cx="16" cy="18" r="0.8" fill="currentColor"></circle>
           </svg>
           <span class="time-label">结束时间</span>
-          <span class="time-value">{{ displayDueDate || '未设时间' }}</span>
+          <span class="time-value" :title="displayDueDate || '未设时间'">{{ displayDueDate || '未设时间' }}</span>
         </div>
       </template>
 
@@ -349,9 +349,13 @@ const displayDueDate = computed(() => {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  min-height: 190px;
+  justify-content: flex-start;
+  gap: 12px;
+  min-height: auto;
   height: auto;
+  flex-shrink: 0;
+  width: 100%;
+  overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
@@ -509,7 +513,7 @@ const displayDueDate = computed(() => {
 /* Dashed Divider */
 .card-divider {
   border-top: 1px dashed var(--border-color);
-  margin: 12px 0;
+  margin: 0;
   width: 100%;
 }
 
@@ -526,6 +530,9 @@ const displayDueDate = computed(() => {
   font-size: 14.5px;
   line-height: 1.5;
   height: 26px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .calendar-icon {
@@ -555,7 +562,8 @@ const displayDueDate = computed(() => {
 
 .git-path-tag {
   display: inline-block;
-  max-width: 180px;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -574,6 +582,7 @@ const displayDueDate = computed(() => {
   height: 26px;
   box-sizing: border-box;
   flex: 1;
+  min-width: 0;
   max-width: 220px;
 }
 
@@ -592,7 +601,7 @@ const displayDueDate = computed(() => {
   border-radius: 6px;
   height: 26px;
   box-sizing: border-box;
-  max-width: 220px;
+  min-width: 0;
   flex: 1;
   transition: background-color 0.2s;
   user-select: none;
@@ -610,6 +619,7 @@ const displayDueDate = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
+  min-width: 0;
 }
 
 .folder-path.placeholder {
@@ -638,10 +648,11 @@ const displayDueDate = computed(() => {
 
 .time-label {
   color: var(--text-secondary);
-  margin-right: 20px;
+  margin-right: 12px;
   font-size: 14.5px;
   font-weight: 500;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .time-value {
@@ -649,6 +660,10 @@ const displayDueDate = computed(() => {
   font-size: 14.5px;
   font-weight: 500;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 
 .time-value.muted {

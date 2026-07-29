@@ -190,6 +190,9 @@ body {
   padding: 3.2rem 2rem 1.5rem 2rem;
   background-color: var(--bg-main);
   min-height: 0;
+  height: 100%;
+  max-height: 100vh;
+  overflow: hidden;
 }
 
 @media (max-width: 1024px), (max-height: 760px) {
