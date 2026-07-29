@@ -46,7 +46,7 @@
       "endpoints": [
         "https://github.com/annz02/TodoList/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZGMjEyQkFFOERCMzhDNEQKUldSTmpMT05yaXNoLzllQ3ovb0pmTVVnVjQ5KzJWcWtEcm5RdmhJRDBTYVJ4TncvaG1XZHlSRksK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJDMkNERTREQzBFNTg0MEQKUldRTmhPWEFUZDRzTEorN1kxcDV4UDdKYzUyT2JOMU9BZXRaaDVjTGVXMi82NXNXRGhSaEU1TXUK",
       "windows": {
         "installMode": "passive"
       }
