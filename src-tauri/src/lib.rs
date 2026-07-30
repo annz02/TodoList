@@ -154,6 +154,43 @@ fn open_url(url: String) -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+fn run_installer(bytes: Vec<u8>, file_name: String) -> Result<(), String> {
+    let temp_dir = std::env::temp_dir();
+    let dest_path = temp_dir.join(&file_name);
+
+    std::fs::write(&dest_path, bytes).map_err(|e| format!("保存安装程序失败: {}", e))?;
+
+    #[cfg(target_os = "windows")]
+    {
+        if file_name.ends_with(".msi") {
+            std::process::Command::new("msiexec")
+                .args(&["/i", &dest_path.to_string_lossy(), "/passive"])
+                .spawn()
+                .map_err(|e| format!("启动安装程序失败: {}", e))?;
+        } else if file_name.ends_with(".exe") {
+            std::process::Command::new(&dest_path)
+                .spawn()
+                .map_err(|e| format!("启动安装程序失败: {}", e))?;
+        } else {
+            std::process::Command::new("cmd")
+                .args(&["/c", "start", "", &dest_path.to_string_lossy()])
+                .spawn()
+                .map_err(|e| format!("打开发布包失败: {}", e))?;
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&dest_path)
+            .spawn()
+            .map_err(|e| format!("打开发布包失败: {}", e))?;
+    }
+
+    std::process::exit(0);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   #[cfg(target_os = "windows")]
@@ -166,7 +203,7 @@ pub fn run() {
 
   tauri::Builder::default()
     .plugin(tauri_plugin_notification::init())
-    .invoke_handler(tauri::generate_handler![save_todos, load_todos, save_settings, load_settings, get_git_commits, select_folder, open_url])
+    .invoke_handler(tauri::generate_handler![save_todos, load_todos, save_settings, load_settings, get_git_commits, select_folder, open_url, run_installer])
 
     .setup(|app| {
       if cfg!(debug_assertions) {

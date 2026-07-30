@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { UpdateInfo } from '../composables/useUpdate';
 
@@ -13,21 +14,85 @@ const emit = defineEmits<{
   (e: 'viewChangelog'): void;
 }>();
 
-const openDownloadLink = async () => {
-  if (props.updateInfo?.url) {
-    const targetUrl = props.updateInfo.downloadUrl || props.updateInfo.url;
+const isDownloading = ref(false);
+const isInstalling = ref(false);
+const downloadPercent = ref(0);
+const downloadError = ref('');
+
+const handleStartUpdate = async () => {
+  if (!props.updateInfo?.downloadUrl && !props.updateInfo?.url) return;
+  
+  const targetUrl = props.updateInfo.downloadUrl || props.updateInfo.url;
+  
+  const isBinary = targetUrl.endsWith('.exe') || targetUrl.endsWith('.msi') || targetUrl.endsWith('.zip') || targetUrl.endsWith('.dmg');
+  if (!isBinary) {
     try {
       await invoke('open_url', { url: targetUrl });
     } catch {
       window.open(targetUrl, '_blank');
     }
+    return;
+  }
+
+  isDownloading.value = true;
+  downloadPercent.value = 0;
+  downloadError.value = '';
+
+  try {
+    const res = await fetch(targetUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const total = parseInt(res.headers.get('content-length') || '0', 10);
+    const reader = res.body?.getReader();
+
+    if (!reader) throw new Error('网络流读取失败');
+
+    let loaded = 0;
+    const chunks: Uint8Array[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      loaded += value.length;
+      if (total > 0) {
+        downloadPercent.value = Math.min(99, Math.round((loaded / total) * 100));
+      }
+    }
+
+    downloadPercent.value = 100;
+    isInstalling.value = true;
+
+    const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
+    const combined = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      combined.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    const fileName = targetUrl.substring(targetUrl.lastIndexOf('/') + 1) || 'Todolist_Setup.exe';
+
+    await invoke('run_installer', { bytes: Array.from(combined), fileName });
+  } catch (err: any) {
+    console.error('Download update error:', err);
+    downloadError.value = '应用内下载失败，正在转至浏览器下载...';
+    setTimeout(async () => {
+      try {
+        await invoke('open_url', { url: targetUrl });
+      } catch {
+        window.open(targetUrl, '_blank');
+      }
+      isDownloading.value = false;
+      isInstalling.value = false;
+    }, 1500);
   }
 };
 </script>
 
 <template>
   <Transition name="modal-fade">
-    <div v-if="show" class="modal-overlay" @click.self="emit('close')">
+    <div v-if="show" class="modal-overlay" @click.self="!isDownloading && !isInstalling && emit('close')">
       <div class="update-modal-card">
         <!-- 头部图标与版本变化 -->
         <div class="update-header">
@@ -63,17 +128,31 @@ const openDownloadLink = async () => {
           </div>
         </div>
 
+        <!-- 下载与安装进度条 -->
+        <div v-if="isDownloading || isInstalling" class="progress-section">
+          <div class="progress-info">
+            <span>{{ isInstalling ? '下载完成，正在启动安装程序...' : '正在在应用内下载更新包...' }}</span>
+            <span v-if="!isInstalling && downloadPercent > 0">{{ downloadPercent }}%</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" :style="{ width: isInstalling ? '100%' : `${Math.max(downloadPercent, 5)}%` }"></div>
+          </div>
+          <div v-if="downloadError" class="progress-error">{{ downloadError }}</div>
+        </div>
+
         <!-- 底部按钮操作区 -->
         <div class="update-footer">
-          <button type="button" class="btn btn-text" @click="emit('viewChangelog')">
+          <button type="button" class="btn btn-text" :disabled="isDownloading || isInstalling" @click="emit('viewChangelog')">
             查看完整 Changelog
           </button>
           <div class="footer-actions">
-            <button type="button" class="btn btn-secondary" @click="emit('close')">
+            <button type="button" class="btn btn-secondary" :disabled="isDownloading || isInstalling" @click="emit('close')">
               暂不更新
             </button>
-            <button type="button" class="btn btn-primary" @click="openDownloadLink">
-              前往下载 / 更新
+            <button type="button" class="btn btn-primary" :disabled="isDownloading || isInstalling" @click="handleStartUpdate">
+              <span v-if="isInstalling">启动安装中...</span>
+              <span v-else-if="isDownloading">下载中 {{ downloadPercent > 0 ? downloadPercent + '%' : '' }}</span>
+              <span v-else>立即更新</span>
             </button>
           </div>
         </div>
@@ -222,6 +301,42 @@ const openDownloadLink = async () => {
 .empty-notes {
   margin: 0;
   color: var(--text-muted, #9ca3af);
+}
+
+.progress-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: fadeIn 0.2s ease-in;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--primary-color, #3b82f6);
+}
+
+.progress-bar-bg {
+  width: 100%;
+  height: 7px;
+  background: var(--bg-sidebar, #e5e7eb);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--primary-color, #3b82f6);
+  border-radius: 4px;
+  transition: width 0.2s ease;
+}
+
+.progress-error {
+  font-size: 0.8rem;
+  color: #ef4444;
+  margin-top: 2px;
 }
 
 .update-footer {
