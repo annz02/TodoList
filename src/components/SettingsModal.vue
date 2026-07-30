@@ -9,14 +9,17 @@ defineProps<{ show: boolean }>();
 const emit = defineEmits<{ (e: 'close'): void }>();
 
 const { primaryColor, themeColors, setPrimaryColor, themeMode, setThemeMode } = useTheme();
-const { 
-  currentVersion, 
-  isChecking, 
-  checkStatusMsg, 
-  autoCheckUpdate, 
-  setAutoCheckUpdate, 
-  checkUpdate, 
-  pendingUpdate 
+const {
+  currentVersion,
+  isChecking,
+  checkStatusMsg,
+  autoCheckUpdate,
+  setAutoCheckUpdate,
+  checkUpdate,
+  pendingUpdate,
+  installUpdate,
+  updateBusy,
+  progressPercent
 } = useUpdate();
 
 const activeTab = ref<'general' | 'shortcuts'>('general');
@@ -257,8 +260,11 @@ const handleManualCheck = async () => {
     :show="showUpdateModal"
     :current-version="currentVersion"
     :update-info="pendingUpdate"
+    :update-busy="updateBusy"
+    :progress-percent="progressPercent"
     @close="showUpdateModal = false"
     @view-changelog="showUpdateModal = false; showChangelogModal = true"
+    @install="installUpdate"
   />
 
   <!-- 完整更新日志 (CHANGELOG) 弹窗 -->

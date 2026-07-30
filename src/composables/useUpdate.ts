@@ -1,50 +1,114 @@
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { getVersion } from '@tauri-apps/api/app';
+import { invoke } from '@tauri-apps/api/core';
 
+// ── Types ──────────────────────────────────────────────────────────────
+
+// Raw status from Rust backend (matches update.rs UpdateStatus camelCase JSON)
+export interface UpdateStatus {
+  status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'up_to_date' | 'error';
+  currentVersion: string;
+  latestVersion: string | null;
+  body: string | null;
+  publishedAt: string | null;
+  downloadedBytes: number | null;
+  contentLength: number | null;
+  error: string | null;
+}
+
+// Backward-compatible simplified info for existing UI (UpdateModal.vue)
 export interface UpdateInfo {
   version: string;
   releaseDate: string;
   notes: string;
   url: string;
-  downloadUrl?: string;
 }
+
+// ── Constants ──────────────────────────────────────────────────────────
 
 const STORAGE_KEY_AUTO_CHECK = 'auto_check_update';
 const REPO_OWNER = 'annz02';
 const REPO_NAME = 'TodoList-Ann';
 
-// Helper to compare semver versions (e.g. "0.1.19" vs "0.1.18")
-export function compareVersions(v1: string, v2: string): number {
-  const clean1 = v1.replace(/^v/i, '').trim();
-  const clean2 = v2.replace(/^v/i, '').trim();
-  
-  const parts1 = clean1.split('.').map(n => parseInt(n, 10) || 0);
-  const parts2 = clean2.split('.').map(n => parseInt(n, 10) || 0);
-  
-  const maxLen = Math.max(parts1.length, parts2.length);
-  for (let i = 0; i < maxLen; i++) {
-    const val1 = parts1[i] || 0;
-    const val2 = parts2[i] || 0;
-    if (val1 > val2) return 1;
-    if (val1 < val2) return -1;
-  }
-  return 0;
+const IDLE_STATE: UpdateStatus = {
+  status: 'idle',
+  currentVersion: '',
+  latestVersion: null,
+  body: null,
+  publishedAt: null,
+  downloadedBytes: null,
+  contentLength: null,
+  error: null,
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────
+
+function mapToUpdateInfo(state: UpdateStatus): UpdateInfo | null {
+  if (!state.latestVersion) return null;
+  return {
+    version: state.latestVersion,
+    releaseDate: state.publishedAt
+      ? new Date(state.publishedAt).toLocaleDateString('zh-CN')
+      : '',
+    notes: state.body || '包含最新的功能优化与问题修复。',
+    url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/tag/v${state.latestVersion}`,
+  };
 }
+
+// ── Composable ─────────────────────────────────────────────────────────
 
 export function useUpdate() {
   const currentVersion = ref<string>('0.1.25');
-  const isChecking = ref<boolean>(false);
-  const updateAvailable = ref<boolean>(false);
-  const pendingUpdate = ref<UpdateInfo | null>(null);
-  const checkStatusMsg = ref<string>('');
+  const updateState = ref<UpdateStatus>({ ...IDLE_STATE });
   const autoCheckUpdate = ref<boolean>(true);
 
-  // Load auto check preference
+  // Derived state
+  const isChecking = computed(() => updateState.value.status === 'checking');
+  const updateAvailable = computed(() => updateState.value.status === 'available');
+  const isDownloading = computed(() => updateState.value.status === 'downloading');
+  const isDownloaded = computed(() => updateState.value.status === 'downloaded');
+  const updateBusy = computed(() =>
+    ['checking', 'downloading'].includes(updateState.value.status),
+  );
+  const canInstallUpdate = computed(() => updateState.value.status === 'available');
+  const progressPercent = computed(() => {
+    const downloaded = updateState.value.downloadedBytes ?? 0;
+    const total = updateState.value.contentLength ?? 0;
+    if (!downloaded || !total) return null;
+    return Math.max(0, Math.min(100, Math.round((downloaded / total) * 100)));
+  });
+  const pendingUpdate = computed<UpdateInfo | null>(() => {
+    if (!updateAvailable.value) return null;
+    return mapToUpdateInfo(updateState.value);
+  });
+  const checkStatusMsg = computed(() => {
+    switch (updateState.value.status) {
+      case 'checking':
+        return '正在检查更新...';
+      case 'available':
+        return `发现新版本 v${updateState.value.latestVersion}`;
+      case 'downloading':
+        if (progressPercent.value != null) {
+          return `正在下载 ${progressPercent.value}%`;
+        }
+        return '正在下载更新...';
+      case 'downloaded':
+        return '下载完成，准备安装';
+      case 'up_to_date':
+        return `当前已是最新版本 (v${currentVersion.value})`;
+      case 'error':
+        return updateState.value.error || '检查更新失败';
+      default:
+        return '';
+    }
+  });
+
+  // Init
   onMounted(async () => {
     try {
       currentVersion.value = await getVersion();
     } catch {
-      currentVersion.value = '0.1.18';
+      // keep fallback
     }
 
     const savedAutoCheck = localStorage.getItem(STORAGE_KEY_AUTO_CHECK);
@@ -53,112 +117,87 @@ export function useUpdate() {
     }
   });
 
+  // ── Actions ────────────────────────────────────────────────────────
+
   const setAutoCheckUpdate = (val: boolean) => {
     autoCheckUpdate.value = val;
     localStorage.setItem(STORAGE_KEY_AUTO_CHECK, String(val));
   };
 
+  /** Called from event listener (App.vue) to apply backend-pushed state */
+  const applyUpdateState = (payload: UpdateStatus) => {
+    updateState.value = payload;
+  };
+
+  /** Fetch current state from backend (used on startup to restore state) */
+  const refreshUpdateState = async () => {
+    try {
+      const state = await invoke<UpdateStatus>('get_update_state');
+      updateState.value = state;
+    } catch (e) {
+      console.warn('Failed to get update state:', e);
+    }
+  };
+
   /**
-   * Fetch and parse release info from GitHub API or raw CHANGELOG.md
+   * Check for updates via Rust backend (tauri-plugin-updater).
+   * @param isManual - If true, show error messages to user
+   * @returns UpdateInfo if update available, null otherwise
    */
   const checkUpdate = async (isManual = false): Promise<UpdateInfo | null> => {
-    isChecking.value = true;
-    checkStatusMsg.value = '';
-    
     try {
-      // 1. Try fetching GitHub latest release
-      const apiUrl = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest`;
-      const response = await fetch(apiUrl, {
-        headers: { 'Accept': 'application/vnd.github.v3+json' }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const latestTag = (data.tag_name || '').trim();
-        const latestVer = latestTag.replace(/^v/i, '');
-
-        if (latestVer && compareVersions(latestVer, currentVersion.value) > 0) {
-          // Find matching installer asset if present
-          let assetUrl = data.html_url;
-          if (Array.isArray(data.assets) && data.assets.length > 0) {
-            const winAsset = data.assets.find((a: any) => 
-              a.name && (a.name.endsWith('.exe') || a.name.endsWith('.msi') || a.name.endsWith('.zip'))
-            );
-            if (winAsset) assetUrl = winAsset.browser_download_url;
-          }
-
-          const updateInfo: UpdateInfo = {
-            version: latestVer,
-            releaseDate: data.published_at ? new Date(data.published_at).toLocaleDateString('zh-CN') : '',
-            notes: data.body || '包含最新的功能优化与问题修复。',
-            url: data.html_url || `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases`,
-            downloadUrl: assetUrl
-          };
-
-          pendingUpdate.value = updateInfo;
-          updateAvailable.value = true;
-          checkStatusMsg.value = `发现新版本 v${latestVer}`;
-          return updateInfo;
-        }
-      }
-
-      // 2. Fallback: Fetch raw CHANGELOG.md
-      const changelogUrl = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main/CHANGELOG.md`;
-      const changelogRes = await fetch(changelogUrl);
-
-      if (changelogRes.ok) {
-        const text = await changelogRes.text();
-        // Parse version header e.g. ## [0.1.19] - 2026-07-30
-        const versionMatch = text.match(/##\s*\[v?([0-9]+\.[0-9]+\.[0-9]+)\](?:\s*-\s*([^\r\n]+))?/);
-        if (versionMatch) {
-          const latestVer = versionMatch[1];
-          const releaseDate = versionMatch[2] ? versionMatch[2].trim() : '';
-
-          if (compareVersions(latestVer, currentVersion.value) > 0) {
-            // Extract notes block for this version
-            const notesBlockMatch = text.match(/##\s*\[v?[0-9]+\.[0-9]+\.[0-9]+\][^\r\n]*\r?\n([\s\S]*?)(?=\r?\n##\s*\[|\s*$)/);
-            const notes = notesBlockMatch ? notesBlockMatch[1].trim() : '包含最新的功能优化与问题修复。';
-
-            const updateInfo: UpdateInfo = {
-              version: latestVer,
-              releaseDate,
-              notes,
-              url: `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases`
-            };
-
-            pendingUpdate.value = updateInfo;
-            updateAvailable.value = true;
-            checkStatusMsg.value = `发现新版本 v${latestVer}`;
-            return updateInfo;
-          }
-        }
-      }
-
-      updateAvailable.value = false;
-      pendingUpdate.value = null;
-      if (isManual) {
-        checkStatusMsg.value = `当前已是最新版本 (v${currentVersion.value})`;
+      const state = await invoke<UpdateStatus>('check_for_updates');
+      updateState.value = state;
+      if (state.status === 'available') {
+        return mapToUpdateInfo(state);
       }
       return null;
     } catch (e: any) {
-      if (isManual) {
-        checkStatusMsg.value = '检查更新失败，请检查网络连接';
-      }
       console.warn('Check update error:', e);
+      updateState.value = {
+        ...updateState.value,
+        status: 'error',
+        error: isManual ? '检查更新失败，请检查网络连接' : '',
+      };
       return null;
-    } finally {
-      isChecking.value = false;
+    }
+  };
+
+  /** Download and install the pending update. Progress comes via events. */
+  const installUpdate = async () => {
+    try {
+      const state = await invoke<UpdateStatus>('install_update');
+      updateState.value = state;
+    } catch (e: any) {
+      console.error('Install update error:', e);
+      updateState.value = {
+        ...updateState.value,
+        status: 'error',
+        error: '安装更新失败',
+      };
     }
   };
 
   return {
     currentVersion,
+    updateState,
+    // Computed flags
     isChecking,
     updateAvailable,
+    isDownloading,
+    isDownloaded,
+    updateBusy,
+    canInstallUpdate,
+    progressPercent,
+    // Backward-compatible
     pendingUpdate,
     checkStatusMsg,
     autoCheckUpdate,
+    // Actions
     setAutoCheckUpdate,
     checkUpdate,
+    installUpdate,
+    applyUpdateState,
+    refreshUpdateState,
   };
 }

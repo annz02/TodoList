@@ -1,117 +1,30 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import type { UpdateInfo } from '../composables/useUpdate';
 
 const props = defineProps<{
   show: boolean;
   currentVersion: string;
   updateInfo: UpdateInfo | null;
+  /** Whether an update install/download is in progress */
+  updateBusy: boolean;
+  /** Download progress 0-100, null = indeterminate */
+  progressPercent: number | null;
 }>();
 
 const emit = defineEmits<{
   (e: 'close'): void;
   (e: 'viewChangelog'): void;
+  (e: 'install'): void;
 }>();
 
-const isDownloading = ref(false);
-const isInstalling = ref(false);
-const downloadPercent = ref(0);
-const downloadError = ref('');
-
-const handleStartUpdate = async () => {
-  if (!props.updateInfo?.downloadUrl && !props.updateInfo?.url) return;
-  
-  const targetUrl = props.updateInfo.downloadUrl || props.updateInfo.url;
-  
-  const isBinary = targetUrl.endsWith('.exe') || targetUrl.endsWith('.msi') || targetUrl.endsWith('.zip') || targetUrl.endsWith('.dmg');
-  if (!isBinary) {
-    try {
-      await invoke('open_url', { url: targetUrl });
-    } catch {
-      window.open(targetUrl, '_blank');
-    }
-    return;
-  }
-
-  isDownloading.value = true;
-  downloadPercent.value = 15;
-  downloadError.value = '';
-
-  let unlisten: (() => void) | null = null;
-  try {
-    unlisten = await listen<number>('update-progress', (event) => {
-      downloadPercent.value = event.payload;
-      if (event.payload >= 100) {
-        isInstalling.value = true;
-      }
-    });
-  } catch {}
-
-  try {
-    // Engine 1: JS Streaming Fetch
-    const res = await fetch(targetUrl);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    const total = parseInt(res.headers.get('content-length') || '0', 10);
-    const reader = res.body?.getReader();
-    if (!reader) throw new Error('网络流读取失败');
-
-    let loaded = 0;
-    const chunks: Uint8Array[] = [];
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      loaded += value.length;
-      if (total > 0) {
-        downloadPercent.value = Math.min(99, Math.round((loaded / total) * 100));
-      }
-    }
-
-    downloadPercent.value = 100;
-    isInstalling.value = true;
-
-    const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
-    const combined = new Uint8Array(totalLength);
-    let offset = 0;
-    for (const chunk of chunks) {
-      combined.set(chunk, offset);
-      offset += chunk.length;
-    }
-
-    const fileName = targetUrl.substring(targetUrl.lastIndexOf('/') + 1) || 'Todolist_Setup.exe';
-    await invoke('run_installer', { bytes: Array.from(combined), fileName });
-  } catch (err: any) {
-    console.warn('JS fetch download failed, using Rust backend downloader:', err);
-    try {
-      // Engine 2: Rust Backend Downloader (bypasses CORS / handles 302 redirects)
-      downloadPercent.value = 35;
-      await invoke('download_and_install_update', { url: targetUrl });
-    } catch (rustErr: any) {
-      console.error('Rust downloader failed:', rustErr);
-      downloadError.value = '自动下载失败，正在转至浏览器下载...';
-      setTimeout(async () => {
-        try {
-          await invoke('open_url', { url: targetUrl });
-        } catch {
-          window.open(targetUrl, '_blank');
-        }
-        isDownloading.value = false;
-        isInstalling.value = false;
-      }, 1500);
-    }
-  } finally {
-    if (unlisten) unlisten();
-  }
+const handleStartUpdate = () => {
+  emit('install');
 };
 </script>
 
 <template>
   <Transition name="modal-fade">
-    <div v-if="show" class="modal-overlay" @click.self="!isDownloading && !isInstalling && emit('close')">
+    <div v-if="show" class="modal-overlay" @click.self="!updateBusy && emit('close')">
       <div class="update-modal-card">
         <!-- 头部图标与版本变化 -->
         <div class="update-header">
@@ -147,30 +60,28 @@ const handleStartUpdate = async () => {
           </div>
         </div>
 
-        <!-- 下载与安装进度条 -->
-        <div v-if="isDownloading || isInstalling" class="progress-section">
+        <!-- 下载进度条（仅下载中显示） -->
+        <div v-if="updateBusy && progressPercent != null" class="progress-section">
           <div class="progress-info">
-            <span>{{ isInstalling ? '下载完成，正在启动安装程序...' : '正在在应用内下载更新包...' }}</span>
-            <span v-if="!isInstalling && downloadPercent > 0">{{ downloadPercent }}%</span>
+            <span>{{ progressPercent >= 100 ? '下载完成，正在启动安装程序...' : '正在在应用内下载更新包...' }}</span>
+            <span>{{ progressPercent }}%</span>
           </div>
           <div class="progress-bar-bg">
-            <div class="progress-bar-fill" :style="{ width: isInstalling ? '100%' : `${Math.max(downloadPercent, 5)}%` }"></div>
+            <div class="progress-bar-fill" :style="{ width: `${Math.max(progressPercent, 5)}%` }"></div>
           </div>
-          <div v-if="downloadError" class="progress-error">{{ downloadError }}</div>
         </div>
 
         <!-- 底部按钮操作区 -->
         <div class="update-footer">
-          <button type="button" class="btn btn-text" :disabled="isDownloading || isInstalling" @click="emit('viewChangelog')">
+          <button type="button" class="btn btn-text" :disabled="updateBusy" @click="emit('viewChangelog')">
             查看完整 Changelog
           </button>
           <div class="footer-actions">
-            <button type="button" class="btn btn-secondary" :disabled="isDownloading || isInstalling" @click="emit('close')">
+            <button type="button" class="btn btn-secondary" :disabled="updateBusy" @click="emit('close')">
               暂不更新
             </button>
-            <button type="button" class="btn btn-primary" :disabled="isDownloading || isInstalling" @click="handleStartUpdate">
-              <span v-if="isInstalling">启动安装中...</span>
-              <span v-else-if="isDownloading">下载中 {{ downloadPercent > 0 ? downloadPercent + '%' : '' }}</span>
+            <button type="button" class="btn btn-primary" :disabled="updateBusy" @click="handleStartUpdate">
+              <span v-if="updateBusy">更新中...</span>
               <span v-else>立即更新</span>
             </button>
           </div>
@@ -350,12 +261,6 @@ const handleStartUpdate = async () => {
   background: var(--primary-color, #3b82f6);
   border-radius: 4px;
   transition: width 0.2s ease;
-}
-
-.progress-error {
-  font-size: 0.8rem;
-  color: #ef4444;
-  margin-top: 2px;
 }
 
 .update-footer {

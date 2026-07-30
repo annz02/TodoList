@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { listen } from '@tauri-apps/api/event';
 import type { Todo } from './types';
 import { useTheme } from './composables/useTheme';
 import { useToast } from './composables/useToast';
@@ -21,10 +22,11 @@ import { useUpdate } from './composables/useUpdate';
 
 const { initTheme } = useTheme();
 const { showToast } = useToast();
-const { currentVersion, autoCheckUpdate, checkUpdate, pendingUpdate } = useUpdate();
+const { currentVersion, autoCheckUpdate, checkUpdate, pendingUpdate, installUpdate, applyUpdateState, refreshUpdateState, updateState, updateBusy, progressPercent } = useUpdate();
 
 const showStartupUpdateModal = ref(false);
 const showChangelogModal = ref(false);
+let unlistenUpdate: (() => void) | null = null;
 
 const todos = ref<Todo[]>([]);
 const nowRef = ref(new Date());
@@ -111,6 +113,18 @@ onMounted(() => {
         showStartupUpdateModal.value = true;
       }
     }, 1500);
+  }
+
+  // Register update-status event listener for real-time progress
+  try {
+    await refreshUpdateState();
+    unlistenUpdate = await listen('update-status', (event: any) => {
+      if (event?.payload) {
+        applyUpdateState(event.payload);
+      }
+    });
+  } catch (e) {
+    console.warn('Failed to setup update listener:', e);
   }
 
   window.addEventListener('focus', syncCurrentTime);
@@ -218,6 +232,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (checkInterval) clearInterval(checkInterval);
+  if (unlistenUpdate) unlistenUpdate();
   window.removeEventListener('focus', syncCurrentTime);
   document.removeEventListener('visibilitychange', syncCurrentTime);
   window.removeEventListener('keydown', handleGlobalKeydown);
@@ -601,8 +616,11 @@ const closeWindow = () => getCurrentWindow().close();
     :show="showStartupUpdateModal"
     :current-version="currentVersion"
     :update-info="pendingUpdate"
+    :update-busy="updateBusy"
+    :progress-percent="progressPercent"
     @close="showStartupUpdateModal = false"
     @view-changelog="showStartupUpdateModal = false; showChangelogModal = true"
+    @install="installUpdate"
   />
 
   <ChangelogModal

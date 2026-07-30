@@ -9,6 +9,14 @@
     "beforeDevCommand": "pnpm run dev",
     "beforeBuildCommand": "pnpm run build"
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMxQTIyRDAyMjEzODBBMwpSV1NqZ0JNaTBDSWFBNmdnWEpaZ29jbVorRWlkTTJncVUySVBuMGt5N20zUzZMZ1IrSUozUFJldgo=",
+      "endpoints": [
+        "https://github.com/annz02/TodoList-Ann/releases/latest/download/latest.json"
+      ]
+    }
+  },
   "app": {
     "windows": [
       {
@@ -29,6 +37,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
       "icons/32x32.png",
