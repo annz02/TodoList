@@ -105,7 +105,7 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install pnpm dependencies
-        run: pnpm install
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build and upload with tauri-action
         uses: tauri-apps/tauri-action@v0
