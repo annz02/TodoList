@@ -15,8 +15,16 @@ import InlineTaskCard from './components/InlineTaskCard.vue';
 import CalendarView from './components/CalendarView.vue';
 import AISummaryDrawer from './components/AISummaryDrawer.vue';
 import Toast from './components/Toast.vue';
+import UpdateModal from './components/UpdateModal.vue';
+import ChangelogModal from './components/ChangelogModal.vue';
+import { useUpdate } from './composables/useUpdate';
+
 const { initTheme } = useTheme();
 const { showToast } = useToast();
+const { currentVersion, autoCheckUpdate, checkUpdate, pendingUpdate } = useUpdate();
+
+const showStartupUpdateModal = ref(false);
+const showChangelogModal = ref(false);
 
 const todos = ref<Todo[]>([]);
 const nowRef = ref(new Date());
@@ -94,6 +102,16 @@ onMounted(() => {
   loadTodos();
   initTheme();
   getCurrentWindow().maximize();
+
+  // Startup auto check for updates if enabled
+  if (autoCheckUpdate.value) {
+    setTimeout(async () => {
+      const update = await checkUpdate(false);
+      if (update) {
+        showStartupUpdateModal.value = true;
+      }
+    }, 1500);
+  }
 
   window.addEventListener('focus', syncCurrentTime);
   document.addEventListener('visibilitychange', syncCurrentTime);
@@ -564,4 +582,18 @@ const closeWindow = () => getCurrentWindow().close();
 
   <SettingsModal :show="showSettingsModal" @close="showSettingsModal = false" />
   <Toast />
+
+  <!-- 启动自动检查更新弹窗 -->
+  <UpdateModal
+    :show="showStartupUpdateModal"
+    :current-version="currentVersion"
+    :update-info="pendingUpdate"
+    @close="showStartupUpdateModal = false"
+    @view-changelog="showStartupUpdateModal = false; showChangelogModal = true"
+  />
+
+  <ChangelogModal
+    :show="showChangelogModal"
+    @close="showChangelogModal = false"
+  />
 </template>

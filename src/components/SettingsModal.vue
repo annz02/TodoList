@@ -1,13 +1,27 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { getVersion } from '@tauri-apps/api/app';
+import { ref } from 'vue';
 import { useTheme } from '../composables/useTheme';
+import { useUpdate } from '../composables/useUpdate';
+import UpdateModal from './UpdateModal.vue';
+import ChangelogModal from './ChangelogModal.vue';
 
 defineProps<{ show: boolean }>();
 const emit = defineEmits<{ (e: 'close'): void }>();
 
 const { primaryColor, themeColors, setPrimaryColor, themeMode, setThemeMode } = useTheme();
+const { 
+  currentVersion, 
+  isChecking, 
+  checkStatusMsg, 
+  autoCheckUpdate, 
+  setAutoCheckUpdate, 
+  checkUpdate, 
+  pendingUpdate 
+} = useUpdate();
+
 const activeTab = ref<'general' | 'shortcuts'>('general');
+const showUpdateModal = ref(false);
+const showChangelogModal = ref(false);
 
 const colorNames: Record<string, string> = {
   '#3b82f6': '经典蓝',
@@ -17,15 +31,12 @@ const colorNames: Record<string, string> = {
   '#ec4899': '玫瑰粉',
 };
 
-const appVersion = ref('');
-
-onMounted(async () => {
-  try {
-    appVersion.value = await getVersion();
-  } catch {
-    appVersion.value = '0.1.13';
+const handleManualCheck = async () => {
+  const update = await checkUpdate(true);
+  if (update) {
+    showUpdateModal.value = true;
   }
-});
+};
 </script>
 
 <template>
@@ -115,14 +126,43 @@ onMounted(async () => {
                 </div>
               </div>
 
-              <!-- 版本信息 -->
+              <!-- 启动自动检查更新设置 -->
               <div class="setting-card">
                 <div class="setting-row">
                   <div class="setting-info">
+                    <span class="card-title" style="margin:0;">启动时自动检查更新</span>
+                  </div>
+                  <div 
+                    class="toggle-switch" 
+                    :class="{ active: autoCheckUpdate }" 
+                    @click.stop="setAutoCheckUpdate(!autoCheckUpdate)"
+                  >
+                    <div class="toggle-knob"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 版本更新与 Changelog -->
+              <div class="setting-card update-card" :class="{ 'expanded': checkStatusMsg }">
+                <div class="setting-row">
+                  <div class="setting-info">
                     <div class="info-text">
-                      <span class="card-title">版本信息</span>
-                      <span class="card-desc">当前版本 v{{ appVersion }}</span>
+                      <span class="card-title">版本更新</span>
+                      <span class="card-desc">当前版本 v{{ currentVersion }}</span>
+                      <span v-if="checkStatusMsg" class="update-status-msg">{{ checkStatusMsg }}</span>
                     </div>
+                  </div>
+                  <div class="action-btns">
+                    <button type="button" class="changelog-btn" @click.stop="showChangelogModal = true" title="查看 Changelog">
+                      更新日志
+                    </button>
+                    <button type="button" class="update-check-btn" :disabled="isChecking" @click.stop="handleManualCheck">
+                      <svg v-if="!isChecking" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                      </svg>
+                      <span>{{ isChecking ? '检查中...' : '检查更新' }}</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -214,6 +254,21 @@ onMounted(async () => {
       </div>
     </div>
   </Transition>
+
+  <!-- 新版本更新弹窗 -->
+  <UpdateModal
+    :show="showUpdateModal"
+    :current-version="currentVersion"
+    :update-info="pendingUpdate"
+    @close="showUpdateModal = false"
+    @view-changelog="showUpdateModal = false; showChangelogModal = true"
+  />
+
+  <!-- 完整更新日志 (CHANGELOG) 弹窗 -->
+  <ChangelogModal
+    :show="showChangelogModal"
+    @close="showChangelogModal = false"
+  />
 </template>
 
 <style scoped>
@@ -524,5 +579,72 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--text-muted);
   padding: 0 2px;
+}
+
+.action-btns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.changelog-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.changelog-btn:hover {
+  background: var(--bg-main);
+  color: var(--text-main);
+  border-color: var(--primary-color);
+}
+
+.update-check-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--primary-color);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--primary-color);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.update-check-btn:hover:not(:disabled) {
+  background: var(--primary-light);
+}
+
+.update-check-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.general-panel .setting-card.update-card {
+  transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.general-panel .setting-card.update-card.expanded {
+  height: auto;
+  min-height: 82px;
+  padding: 12px 20px;
+}
+
+.update-status-msg {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary-color);
+  animation: fadeIn 0.25s ease-in-out;
 }
 </style>
