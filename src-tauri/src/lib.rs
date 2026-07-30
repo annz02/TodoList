@@ -126,11 +126,18 @@ fn select_folder() -> Option<String> {
     folder.map(|p| p.to_string_lossy().to_string())
 }
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("cmd")
+            .creation_flags(CREATE_NO_WINDOW)
             .args(&["/c", "start", "", &url])
             .spawn()
             .map_err(|e| e.to_string())?;
@@ -165,6 +172,7 @@ fn run_installer(bytes: Vec<u8>, file_name: String) -> Result<(), String> {
     {
         if file_name.ends_with(".msi") {
             std::process::Command::new("msiexec")
+                .creation_flags(CREATE_NO_WINDOW)
                 .args(&["/i", &dest_path.to_string_lossy(), "/passive"])
                 .spawn()
                 .map_err(|e| format!("启动安装程序失败: {}", e))?;
@@ -174,6 +182,7 @@ fn run_installer(bytes: Vec<u8>, file_name: String) -> Result<(), String> {
                 .map_err(|e| format!("启动安装程序失败: {}", e))?;
         } else {
             std::process::Command::new("cmd")
+                .creation_flags(CREATE_NO_WINDOW)
                 .args(&["/c", "start", "", &dest_path.to_string_lossy()])
                 .spawn()
                 .map_err(|e| format!("打开发布包失败: {}", e))?;
@@ -218,7 +227,8 @@ async fn download_and_install_update(app: tauri::AppHandle, url: String) -> Resu
         let _ = app.emit("update-progress", 40);
 
         let status = std::process::Command::new("powershell")
-            .args(&["-NoProfile", "-NonInteractive", "-Command", &ps_code])
+            .creation_flags(CREATE_NO_WINDOW)
+            .args(&["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &ps_code])
             .status()
             .map_err(|e| format!("下载失败: {}", e))?;
 
@@ -230,6 +240,7 @@ async fn download_and_install_update(app: tauri::AppHandle, url: String) -> Resu
 
         if file_name.ends_with(".msi") {
             std::process::Command::new("msiexec")
+                .creation_flags(CREATE_NO_WINDOW)
                 .args(&["/i", &dest_path.to_string_lossy(), "/passive"])
                 .spawn()
                 .map_err(|e| format!("启动安装程序失败: {}", e))?;
