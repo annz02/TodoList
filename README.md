@@ -45,6 +45,12 @@ TodoList 致力于提供简洁、高效、极致美观的任务管理体验，�
   - `Ctrl + D` 删除任务
   - `Ctrl + W` 关闭窗口
 
+### 🔄 自动更新
+- **应用内更新**：支持一键检查、下载、安装新版本，无需手动访问 GitHub。
+- **签名校验**：基于 minisign 公钥验签，确保更新包完整性，防止篡改。
+- **跨版本 Release Notes**：升级时自动聚合当前版本到最新版之间所有变更说明。
+- **静默启动检查**：应用启动时自动后台检查更新，失败不打扰用户。
+
 ---
 
 ## 🛠 技术栈
@@ -55,7 +61,9 @@ TodoList 致力于提供简洁、高效、极致美观的任务管理体验，�
 | **编程语言** | TypeScript |
 | **构建工具** | Vite |
 | **桌面端框架** | Tauri v2 (Rust) |
-| **通知插件** | `@tauri-apps/plugin-notification` |
+| **自动更新** | tauri-plugin-updater + minisign 签名校验 |
+| **通知插件** | tauri-plugin-notification + @tauri-apps/plugin-notification |
+| **HTTP 客户端** | reqwest (Rust) |
 | **样式与设计** | 原生 CSS (CSS Variables + 响应式布局 + 现代 UI) |
 
 ---
@@ -70,25 +78,25 @@ TodoList 致力于提供简洁、高效、极致美观的任务管理体验，�
 
 ### 2. 安装依赖
 ```bash
-npm install
+pnpm install
 ```
 
 ### 3. 开发环境运行
 ```bash
 # 启动网页端开发调试
-npm run dev
+pnpm dev
 
 # 启动 Tauri 桌面应用开发调试
-npm run tauri dev
+pnpm tauri dev
 ```
 
 ### 4. 构建打包
 ```bash
 # 前端静态资源打包
-npm run build
+pnpm build
 
 # Tauri 桌面客户端打包
-npm run tauri build
+pnpm tauri build
 ```
 
 ---
@@ -97,9 +105,9 @@ npm run tauri build
 
 到 [Releases](https://github.com/annz02/TodoList-Ann/releases) 页面下载最新版安装包：
 
-- **Windows**: 下载 `.msi` 或 `.exe` 安装包（NSIS 安装器）
-- **macOS Intel**: 下载 `x64` 的 `.dmg` 文件
-- **macOS Apple Silicon**: 下载 `arm64` (aarch64) 的 `.dmg` 文件
+- **Windows**: 下载 `_x64-setup.exe` 或 `_x64_en-US.msi`
+- **macOS Intel**: 下载文件名含 `x64` 的 `.dmg` 文件
+- **macOS Apple Silicon**: 下载文件名含 `aarch64` 的 `.dmg` 文件
 
 首次打开 macOS 版本时，由于未进行 Apple 开发者签名和公证，系统会提示无法验证开发者。请在「系统设置 > 隐私与安全性」中点击「仍要打开」。
 
