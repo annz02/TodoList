@@ -408,6 +408,19 @@ const allCount = computed(() => todos.value.length);
 
 const currentDate = computed(() => nowRef.value.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }));
 
+const headerSubTitle = computed(() => {
+  if (activeCategory.value === 'all') {
+    return '记录每一件事，轻松掌控工作与生活';
+  }
+  if (activeCategory.value === 'completed') {
+    return '回顾成就，保持高效';
+  }
+  if (activeCategory.value === 'calendar') {
+    return '点击日期查看当天任务，合理规划每一天';
+  }
+  return currentDate.value;
+});
+
 const initialStartTime = ref<string | undefined>(undefined);
 
 const handleAddTaskClick = (startTime?: string) => {
@@ -475,7 +488,7 @@ const closeWindow = () => getCurrentWindow().close();
           <h1>
             {{ activeCategory === 'today' ? '今天' : activeCategory === 'completed' ? '已完成' : activeCategory === 'calendar' ? '日历视图' : '全部任务' }}
           </h1>
-          <div class="date">{{ activeCategory === 'calendar' ? '点击日期查看当天任务，合理规划每一天' : currentDate }}</div>
+          <div class="date">{{ headerSubTitle }}</div>
         </div>
       </div>
       <div class="header-right" style="z-index: 11;">
