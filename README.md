@@ -1,11 +1,11 @@
 # 📝 TodoList 智能待办与 AI 日报助手
 
 <p align="left">
-  <a href="https://github.com/annz02/TodoList/releases"><img src="https://img.shields.io/github/v/release/annz02/TodoList?style=flat-square&color=3b82f6" alt="Release"></a>
-  <a href="https://github.com/annz02/TodoList/releases"><img src="https://img.shields.io/github/downloads/annz02/TodoList/total?style=flat-square&color=10b981" alt="Downloads"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/annz02/TodoList?style=flat-square&color=8b5cf6" alt="License"></a>
-  <a href="https://github.com/annz02/TodoList/releases"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-06b6d4?style=flat-square" alt="Platform"></a>
-  <a href="https://github.com/annz02/TodoList/stargazers"><img src="https://img.shields.io/github/stars/annz02/TodoList?style=flat-square&color=f59e0b" alt="Stars"></a>
+  <a href="https://github.com/annz02/TodoList-Ann/releases"><img src="https://img.shields.io/github/v/release/annz02/TodoList-Ann?style=flat-square&color=3b82f6" alt="Release"></a>
+  <a href="https://github.com/annz02/TodoList-Ann/releases"><img src="https://img.shields.io/github/downloads/annz02/TodoList-Ann/total?style=flat-square&color=10b981" alt="Downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/annz02/TodoList-Ann?style=flat-square&color=8b5cf6" alt="License"></a>
+  <a href="https://github.com/annz02/TodoList-Ann/releases"><img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS-06b6d4?style=flat-square" alt="Platform"></a>
+  <a href="https://github.com/annz02/TodoList-Ann/stargazers"><img src="https://img.shields.io/github/stars/annz02/TodoList-Ann?style=flat-square&color=f59e0b" alt="Stars"></a>
 </p>
 
 一个基于 **Vue 3 + TypeScript + Vite + Tauri** 构建的高颜值、现代化桌面端待办事项管理与 AI 工作日报应用。
@@ -95,7 +95,7 @@ npm run tauri build
 
 ## 📦 下载安装
 
-到 [Releases](https://github.com/annz02/TodoList/releases) 页面下载最新版安装包：
+到 [Releases](https://github.com/annz02/TodoList-Ann/releases) 页面下载最新版安装包：
 
 - **Windows**: 下载 `.msi` 或 `.exe` 安装包（NSIS 安装器）
 - **macOS Intel**: 下载 `x64` 的 `.dmg` 文件
