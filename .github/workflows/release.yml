@@ -111,13 +111,10 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY || secrets.TAURI_PRIVATE_KEY || 'dW50cnVzdGVkIGNvbW1lbnQ6IHJzaWduIGVuY3J5cHRlZCBzZWNyZXQga2V5ClJXUlRZMEl5amc1UThiNnNtL0NtYStTd2pxOGpobHpkZkgwVlRaM3c0U2d4QzZiR2xmTUFBQkFBQUFBQUFBQUFBQUlBQUFBQWM1RDlpRWlQaGhTUDNZanNtMnZDUEhGUUUvb1pEaW9EWEFaZUFRVEIreEhWditzTVp1RnluZUQ5engrWTdUYUpXa2RJSk9Pc2JTRXIxajJla0JGamRwTm9tOTczUEMvdGIwcVB6TUFqaldKWTQrNXROVlQ1bVYzZ3JEQTFYTlROcnlERnk2cEdCRDg9Cg==' }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || secrets.TAURI_KEY_PASSWORD || '' }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: ${{ github.ref_name }}
           releaseId: ${{ needs.create-draft.outputs.release_id }}
-          includeUpdaterJson: false
           args: ${{ matrix.args }}
 
   publish-release:
@@ -126,20 +123,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Generate latest.json via GitHub API
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_ID: ${{ needs.create-draft.outputs.release_id }}
-        run: node .github/scripts/generate-manifest.js
-
-      - name: Publish release with latest.json
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           draft: false
-          files: |
-            latest.json

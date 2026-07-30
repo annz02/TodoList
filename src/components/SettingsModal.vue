@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import { ref, shallowRef, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { getVersion } from '@tauri-apps/api/app';
-import { check, type Update } from '@tauri-apps/plugin-updater';
-import { relaunch } from '@tauri-apps/plugin-process';
 import { useTheme } from '../composables/useTheme';
-import UpdateModal from './UpdateModal.vue';
 
 defineProps<{ show: boolean }>();
 const emit = defineEmits<{ (e: 'close'): void }>();
@@ -21,16 +18,6 @@ const colorNames: Record<string, string> = {
 };
 
 const appVersion = ref('');
-const isCheckingUpdate = ref(false);
-const updateStatusMsg = ref('');
-let updateStatusTimer: ReturnType<typeof setTimeout> | null = null;
-
-// 新版本更新弹窗状态
-const showUpdateModal = ref(false);
-const pendingUpdate = shallowRef<Update | null>(null);
-const isDownloading = ref(false);
-const isInstalling = ref(false);
-const downloadPercent = ref(0);
 
 onMounted(async () => {
   try {
@@ -39,86 +26,6 @@ onMounted(async () => {
     appVersion.value = '0.1.13';
   }
 });
-
-const scheduleStatusClear = () => {
-  if (updateStatusTimer) clearTimeout(updateStatusTimer);
-  updateStatusTimer = setTimeout(() => {
-    updateStatusMsg.value = '';
-  }, 5000);
-};
-
-const handleCheckUpdate = async () => {
-  if (updateStatusTimer) {
-    clearTimeout(updateStatusTimer);
-    updateStatusTimer = null;
-  }
-  isCheckingUpdate.value = true;
-  updateStatusMsg.value = '';
-  try {
-    const update = await check();
-    if (update) {
-      pendingUpdate.value = update;
-      showUpdateModal.value = true;
-    } else {
-      updateStatusMsg.value = '当前已是最新版本';
-      scheduleStatusClear();
-    }
-  } catch (e: any) {
-    const msg = e.message || String(e);
-    if (msg.includes('cancel')) {
-      updateStatusMsg.value = '更新已取消';
-    } else if (msg.includes('minisign') || msg.includes('encoding')) {
-      updateStatusMsg.value = '更新包数字签名格式损坏，请稍后重试';
-    } else if (msg.includes('Could not fetch a valid release JSON') || msg.includes('404')) {
-      updateStatusMsg.value = '更新服务暂未就绪或未发布';
-    } else {
-      updateStatusMsg.value = '检查更新失败: ' + msg;
-    }
-    scheduleStatusClear();
-  } finally {
-    isCheckingUpdate.value = false;
-  }
-};
-
-const handleConfirmUpdate = async () => {
-  if (!pendingUpdate.value) return;
-  isDownloading.value = true;
-  isInstalling.value = false;
-  downloadPercent.value = 0;
-
-  let downloaded = 0;
-  let contentLength = 0;
-
-  try {
-    await pendingUpdate.value.downloadAndInstall((event) => {
-      if (event.event === 'Started') {
-        contentLength = event.data.contentLength || 0;
-      } else if (event.event === 'Progress') {
-        downloaded += event.data.chunkLength;
-        if (contentLength > 0) {
-          downloadPercent.value = Math.round((downloaded / contentLength) * 100);
-        }
-      } else if (event.event === 'Finished') {
-        isInstalling.value = true;
-      }
-    });
-    await relaunch();
-  } catch (e: any) {
-    showUpdateModal.value = false;
-    const msg = e.message || String(e);
-    if (msg.includes('signature') || msg.includes('minisign') || msg.includes('Validation')) {
-      updateStatusMsg.value = '下载更新失败: 更新包数字签名校验未通过';
-    } else if (msg.includes('archive') || msg.includes('zip') || msg.includes('extract')) {
-      updateStatusMsg.value = '下载更新失败: 更新压缩包解压或安装出错';
-    } else {
-      updateStatusMsg.value = '下载更新失败: ' + msg;
-    }
-    scheduleStatusClear();
-  } finally {
-    isDownloading.value = false;
-    isInstalling.value = false;
-  }
-};
 </script>
 
 <template>
@@ -208,23 +115,15 @@ const handleConfirmUpdate = async () => {
                 </div>
               </div>
 
-              <!-- 版本与更新 -->
-              <div class="setting-card update-card" :class="{ 'expanded': updateStatusMsg }">
+              <!-- 版本信息 -->
+              <div class="setting-card">
                 <div class="setting-row">
                   <div class="setting-info">
                     <div class="info-text">
-                      <span class="card-title">版本更新</span>
+                      <span class="card-title">版本信息</span>
                       <span class="card-desc">当前版本 v{{ appVersion }}</span>
-                      <span v-if="updateStatusMsg" class="update-status-msg">{{ updateStatusMsg }}</span>
                     </div>
                   </div>
-                  <button type="button" class="update-check-btn" :disabled="isCheckingUpdate" @click.stop="handleCheckUpdate">
-                    <svg v-if="!isCheckingUpdate" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <polyline points="23 4 23 10 17 10"></polyline>
-                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                    </svg>
-                    <span>{{ isCheckingUpdate ? '检查中...' : '检查更新' }}</span>
-                  </button>
                 </div>
               </div>
             </div>
@@ -315,20 +214,6 @@ const handleConfirmUpdate = async () => {
       </div>
     </div>
   </Transition>
-
-  <!-- 新版本更新对话框 -->
-  <UpdateModal
-    :show="showUpdateModal"
-    :version="pendingUpdate?.version || ''"
-    :current-version="appVersion"
-    :body="pendingUpdate?.body || ''"
-    :date="pendingUpdate?.date || ''"
-    :is-downloading="isDownloading"
-    :is-installing="isInstalling"
-    :download-percent="downloadPercent"
-    @confirm="handleConfirmUpdate"
-    @close="showUpdateModal = false"
-  />
 </template>
 
 <style scoped>
@@ -639,49 +524,5 @@ const handleConfirmUpdate = async () => {
   font-size: 12px;
   color: var(--text-muted);
   padding: 0 2px;
-}
-
-
-.update-check-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border: 1px solid var(--primary-color);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--primary-color);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.18s ease;
-}
-
-.update-check-btn:hover:not(:disabled) {
-  background: var(--primary-light);
-}
-
-.update-check-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.general-panel .setting-card.update-card {
-  transition: all 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.general-panel .setting-card.update-card.expanded {
-  height: auto;
-  min-height: 82px;
-  padding: 12px 20px;
-}
-
-.update-status-msg {
-  display: block;
-  margin-top: 5px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--primary-color);
-  animation: fadeIn 0.25s ease-in-out;
 }
 </style>

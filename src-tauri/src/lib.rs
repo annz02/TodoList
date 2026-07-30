@@ -138,8 +138,6 @@ pub fn run() {
 
   tauri::Builder::default()
     .plugin(tauri_plugin_notification::init())
-    .plugin(tauri_plugin_updater::Builder::new().build())
-    .plugin(tauri_plugin_process::init())
     .invoke_handler(tauri::generate_handler![save_todos, load_todos, save_settings, load_settings, get_git_commits, select_folder])
 
     .setup(|app| {
