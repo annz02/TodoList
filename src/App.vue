@@ -22,7 +22,7 @@ import { useUpdate } from './composables/useUpdate';
 
 const { initTheme } = useTheme();
 const { showToast } = useToast();
-const { currentVersion, autoCheckUpdate, checkUpdate, pendingUpdate, installUpdate, applyUpdateState, refreshUpdateState, updateState, updateBusy, progressPercent } = useUpdate();
+const { currentVersion, autoCheckUpdate, checkUpdate, pendingUpdate, installUpdate, applyUpdateState, refreshUpdateState, updateBusy, progressPercent } = useUpdate();
 
 const showStartupUpdateModal = ref(false);
 const showChangelogModal = ref(false);
@@ -100,7 +100,7 @@ const playBeep = () => {
   }
 };
 
-onMounted(() => {
+onMounted(async () => {
   loadTodos();
   initTheme();
   getCurrentWindow().maximize();
