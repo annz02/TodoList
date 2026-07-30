@@ -209,7 +209,6 @@ onUnmounted(() => {
   height: auto;
   flex-shrink: 0;
   width: 100%;
-  overflow: hidden;
   box-shadow: 0 8px 20px -4px rgba(59, 130, 246, 0.15);
   box-sizing: border-box;
   animation: cardPop 0.22s cubic-bezier(0.16, 1, 0.3, 1);
@@ -329,7 +328,6 @@ onUnmounted(() => {
   height: 26px;
   width: 100%;
   min-width: 0;
-  overflow: hidden;
 }
 
 .calendar-icon {

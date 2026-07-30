@@ -355,7 +355,6 @@ const displayDueDate = computed(() => {
   height: auto;
   flex-shrink: 0;
   width: 100%;
-  overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
@@ -532,7 +531,6 @@ const displayDueDate = computed(() => {
   height: 26px;
   width: 100%;
   min-width: 0;
-  overflow: hidden;
 }
 
 .calendar-icon {
