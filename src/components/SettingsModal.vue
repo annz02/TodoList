@@ -153,9 +153,6 @@ const handleManualCheck = async () => {
                     </div>
                   </div>
                   <div class="action-btns">
-                    <button type="button" class="changelog-btn" @click.stop="showChangelogModal = true" title="查看 Changelog">
-                      更新日志
-                    </button>
                     <button type="button" class="update-check-btn" :disabled="isChecking" @click.stop="handleManualCheck">
                       <svg v-if="!isChecking" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="23 4 23 10 17 10"></polyline>
@@ -585,24 +582,6 @@ const handleManualCheck = async () => {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.changelog-btn {
-  padding: 6px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 12.5px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.18s ease;
-}
-
-.changelog-btn:hover {
-  background: var(--bg-main);
-  color: var(--text-main);
-  border-color: var(--primary-color);
 }
 
 .update-check-btn {
