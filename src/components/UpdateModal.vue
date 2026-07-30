@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { invoke } from '@tauri-apps/api/core';
 import type { UpdateInfo } from '../composables/useUpdate';
 
 const props = defineProps<{
@@ -12,10 +13,14 @@ const emit = defineEmits<{
   (e: 'viewChangelog'): void;
 }>();
 
-const openDownloadLink = () => {
+const openDownloadLink = async () => {
   if (props.updateInfo?.url) {
     const targetUrl = props.updateInfo.downloadUrl || props.updateInfo.url;
-    window.open(targetUrl, '_blank');
+    try {
+      await invoke('open_url', { url: targetUrl });
+    } catch {
+      window.open(targetUrl, '_blank');
+    }
   }
 };
 </script>

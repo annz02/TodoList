@@ -126,6 +126,34 @@ fn select_folder() -> Option<String> {
     folder.map(|p| p.to_string_lossy().to_string())
 }
 
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(&["/c", "start", "", &url])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   #[cfg(target_os = "windows")]
@@ -138,7 +166,7 @@ pub fn run() {
 
   tauri::Builder::default()
     .plugin(tauri_plugin_notification::init())
-    .invoke_handler(tauri::generate_handler![save_todos, load_todos, save_settings, load_settings, get_git_commits, select_folder])
+    .invoke_handler(tauri::generate_handler![save_todos, load_todos, save_settings, load_settings, get_git_commits, select_folder, open_url])
 
     .setup(|app| {
       if cfg!(debug_assertions) {
