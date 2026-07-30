@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Todolist",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "identifier": "com.todolist.app",
   "build": {
     "frontendDist": "../dist",
@@ -47,7 +47,7 @@
       "endpoints": [
         "https://github.com/annz02/TodoList/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJDMkNERTREQzBFNTg0MEQKUldRTmhPWEFUZDRzTEorN1kxcDV4UDdKYzUyT2JOMU9BZXRaaDVjTGVXMi82NXNXRGhSaEU1TXUK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEVCQ0MzNjlDODRFRDVEMTYKUldRV1hlMkVuRGJNNjZTbWRNUmxyZG9KTk50aERodU1qRnZHYnd5YWpmUlYwZ1U5akFnUXlEbmoK",
       "windows": {
         "installMode": "passive"
       }
