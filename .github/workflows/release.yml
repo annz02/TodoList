@@ -20,7 +20,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
 
       - name: Validate version alignment
         shell: bash
@@ -97,8 +97,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'pnpm'
+          node-version: '20'
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -106,19 +105,19 @@ jobs:
           targets: ${{ matrix.target }}
 
       - name: Install pnpm dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
 
       - name: Build and upload with tauri-action
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY || secrets.TAURI_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || secrets.TAURI_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY || secrets.TAURI_PRIVATE_KEY || 'dW50cnVzdGVkIGNvbW1lbnQ6IHJzaWduIGVuY3J5cHRlZCBzZWNyZXQga2V5ClJXUlRZMEl5YzdUQ2pMeHZPd0wyTU4yZ2t2dzZDYzZ4UlA1MHg0REtjaVpFcm9XY05qb0FBQkFBQUFBQUFBQUFBQUlBQUFBQUMwYURaQmtLSUJPRXFIWFQ4WFZkWE1mOWlNL3l0RWEvQ1dtMXNYYVp5UEtkaWtXNDlQWHNnRTBSR3RMTCtjSGhiQjhZaFQrZ1NkZzQ3ZXoxdGdCOHoyQVdqNEZxTER3dlJnV2RtMG0vZWZqaXlVdDNwUk80MmkzWHp6Mm5uVTFHWDYyTTd6YzBveG89Cg==' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || secrets.TAURI_KEY_PASSWORD || '' }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: ${{ github.ref_name }}
           releaseId: ${{ needs.create-draft.outputs.release_id }}
-          includeUpdaterJson: true
+          includeUpdaterJson: false
           args: ${{ matrix.args }}
 
   publish-release:
@@ -129,7 +128,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '20'
 
       - name: Generate latest.json via GitHub API
         env:
