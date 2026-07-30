@@ -191,6 +191,79 @@ fn run_installer(bytes: Vec<u8>, file_name: String) -> Result<(), String> {
     std::process::exit(0);
 }
 
+#[tauri::command]
+async fn download_and_install_update(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    use tauri::Emitter;
+
+    let temp_dir = std::env::temp_dir();
+    let file_name = if url.contains(".msi") {
+        "Todolist_Setup.msi"
+    } else if url.contains(".zip") {
+        "Todolist_Setup.zip"
+    } else if url.contains(".dmg") {
+        "Todolist_Setup.dmg"
+    } else {
+        "Todolist_Setup.exe"
+    };
+    let dest_path = temp_dir.join(file_name);
+
+    #[cfg(target_os = "windows")]
+    {
+        let dest_str = dest_path.to_string_lossy().replace('\\', "\\\\");
+        let ps_code = format!(
+            "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $wc = New-Object System.Net.WebClient; $wc.DownloadFile('{}', '{}')",
+            url, dest_str
+        );
+
+        let _ = app.emit("update-progress", 40);
+
+        let status = std::process::Command::new("powershell")
+            .args(&["-NoProfile", "-NonInteractive", "-Command", &ps_code])
+            .status()
+            .map_err(|e| format!("下载失败: {}", e))?;
+
+        if !status.success() {
+            return Err("下载更新资源包失败".to_string());
+        }
+
+        let _ = app.emit("update-progress", 100);
+
+        if file_name.ends_with(".msi") {
+            std::process::Command::new("msiexec")
+                .args(&["/i", &dest_path.to_string_lossy(), "/passive"])
+                .spawn()
+                .map_err(|e| format!("启动安装程序失败: {}", e))?;
+        } else if file_name.ends_with(".exe") {
+            std::process::Command::new(&dest_path)
+                .spawn()
+                .map_err(|e| format!("启动安装程序失败: {}", e))?;
+        }
+
+        std::process::exit(0);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let status = std::process::Command::new("curl")
+            .args(&["-L", "-o", &dest_path.to_string_lossy(), &url])
+            .status()
+            .map_err(|e| format!("下载失败: {}", e))?;
+
+        if !status.success() {
+            return Err("下载更新资源包失败".to_string());
+        }
+
+        let _ = app.emit("update-progress", 100);
+
+        std::process::Command::new("open")
+            .arg(&dest_path)
+            .spawn()
+            .map_err(|e| format!("打开发布包失败: {}", e))?;
+
+        std::process::exit(0);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   #[cfg(target_os = "windows")]
@@ -203,7 +276,7 @@ pub fn run() {
 
   tauri::Builder::default()
     .plugin(tauri_plugin_notification::init())
-    .invoke_handler(tauri::generate_handler![save_todos, load_todos, save_settings, load_settings, get_git_commits, select_folder, open_url, run_installer])
+    .invoke_handler(tauri::generate_handler![save_todos, load_todos, save_settings, load_settings, get_git_commits, select_folder, open_url, run_installer, download_and_install_update])
 
     .setup(|app| {
       if cfg!(debug_assertions) {

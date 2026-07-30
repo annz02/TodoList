@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { UpdateInfo } from '../composables/useUpdate';
 
 const props = defineProps<{
@@ -35,16 +36,26 @@ const handleStartUpdate = async () => {
   }
 
   isDownloading.value = true;
-  downloadPercent.value = 0;
+  downloadPercent.value = 15;
   downloadError.value = '';
 
+  let unlisten: (() => void) | null = null;
   try {
+    unlisten = await listen<number>('update-progress', (event) => {
+      downloadPercent.value = event.payload;
+      if (event.payload >= 100) {
+        isInstalling.value = true;
+      }
+    });
+  } catch {}
+
+  try {
+    // Engine 1: JS Streaming Fetch
     const res = await fetch(targetUrl);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const total = parseInt(res.headers.get('content-length') || '0', 10);
     const reader = res.body?.getReader();
-
     if (!reader) throw new Error('网络流读取失败');
 
     let loaded = 0;
@@ -72,20 +83,28 @@ const handleStartUpdate = async () => {
     }
 
     const fileName = targetUrl.substring(targetUrl.lastIndexOf('/') + 1) || 'Todolist_Setup.exe';
-
     await invoke('run_installer', { bytes: Array.from(combined), fileName });
   } catch (err: any) {
-    console.error('Download update error:', err);
-    downloadError.value = '应用内下载失败，正在转至浏览器下载...';
-    setTimeout(async () => {
-      try {
-        await invoke('open_url', { url: targetUrl });
-      } catch {
-        window.open(targetUrl, '_blank');
-      }
-      isDownloading.value = false;
-      isInstalling.value = false;
-    }, 1500);
+    console.warn('JS fetch download failed, using Rust backend downloader:', err);
+    try {
+      // Engine 2: Rust Backend Downloader (bypasses CORS / handles 302 redirects)
+      downloadPercent.value = 35;
+      await invoke('download_and_install_update', { url: targetUrl });
+    } catch (rustErr: any) {
+      console.error('Rust downloader failed:', rustErr);
+      downloadError.value = '自动下载失败，正在转至浏览器下载...';
+      setTimeout(async () => {
+        try {
+          await invoke('open_url', { url: targetUrl });
+        } catch {
+          window.open(targetUrl, '_blank');
+        }
+        isDownloading.value = false;
+        isInstalling.value = false;
+      }, 1500);
+    }
+  } finally {
+    if (unlisten) unlisten();
   }
 };
 </script>

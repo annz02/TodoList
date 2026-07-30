@@ -32,7 +32,7 @@ export function compareVersions(v1: string, v2: string): number {
 }
 
 export function useUpdate() {
-  const currentVersion = ref<string>('0.1.22');
+  const currentVersion = ref<string>('0.1.23');
   const isChecking = ref<boolean>(false);
   const updateAvailable = ref<boolean>(false);
   const pendingUpdate = ref<UpdateInfo | null>(null);
