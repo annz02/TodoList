@@ -67,14 +67,14 @@ const handleCheckUpdate = async () => {
     const msg = e.message || String(e);
     if (msg.includes('cancel')) {
       updateStatusMsg.value = '更新已取消';
-      scheduleStatusClear();
+    } else if (msg.includes('minisign') || msg.includes('encoding')) {
+      updateStatusMsg.value = '更新包数字签名格式损坏，请稍后重试';
     } else if (msg.includes('Could not fetch a valid release JSON') || msg.includes('404')) {
-      updateStatusMsg.value = '更新元数据暂未就绪或无法获取';
-      scheduleStatusClear();
+      updateStatusMsg.value = '更新服务暂未就绪或未发布';
     } else {
       updateStatusMsg.value = '检查更新失败: ' + msg;
-      scheduleStatusClear();
     }
+    scheduleStatusClear();
   } finally {
     isCheckingUpdate.value = false;
   }
@@ -105,7 +105,14 @@ const handleConfirmUpdate = async () => {
     await relaunch();
   } catch (e: any) {
     showUpdateModal.value = false;
-    updateStatusMsg.value = '下载更新失败: ' + (e.message || String(e));
+    const msg = e.message || String(e);
+    if (msg.includes('signature') || msg.includes('minisign') || msg.includes('Validation')) {
+      updateStatusMsg.value = '下载更新失败: 更新包数字签名校验未通过';
+    } else if (msg.includes('archive') || msg.includes('zip') || msg.includes('extract')) {
+      updateStatusMsg.value = '下载更新失败: 更新压缩包解压或安装出错';
+    } else {
+      updateStatusMsg.value = '下载更新失败: ' + msg;
+    }
     scheduleStatusClear();
   } finally {
     isDownloading.value = false;
