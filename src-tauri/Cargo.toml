@@ -27,7 +27,7 @@ tauri-plugin-notification = "2.3.3"
 rfd = "0.15"
 
 [profile.release]
-opt-level = "z"
+opt-level = "s"
 lto = true
 codegen-units = 1
 panic = "abort"
