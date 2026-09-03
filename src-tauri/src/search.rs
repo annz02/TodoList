@@ -141,10 +141,72 @@ async fn fetch_weather(client: &reqwest::Client, city: &str) -> Option<SearchRes
     })
 }
 
+fn clean_search_query(raw: &str) -> String {
+    let mut q = raw.trim().to_string();
+
+    // 1. 过滤口语化开头
+    let prefixes = [
+        "请问一下", "请问", "请帮我查一下", "请帮我查", "请帮我", "帮我查一下", "帮我查", "帮我看看", "帮我",
+        "想问一下", "我想知道", "请教一下", "能否告诉我", "能不能告诉我", "查一下", "看一下", "搜索一下", "搜一下"
+    ];
+    for p in &prefixes {
+        if q.starts_with(p) {
+            q = q[p.len()..].trim().to_string();
+        }
+    }
+
+    // 2. 过滤末尾标点
+    q = q.trim_end_matches(|c: char| c.is_ascii_punctuation() || matches!(c, '？' | '?' | '！' | '!' | '。' | '，' | '、')).trim().to_string();
+
+    // 3. 过滤口语化结尾
+    let endings = [
+        "有什么", "有哪些", "怎么样", "好不好", "如何", "是什么", "么", "吗", "呢", "啊"
+    ];
+    for end in &endings {
+        if q.ends_with(end) {
+            q = q[..q.len() - end.len()].trim().to_string();
+        }
+    }
+
+    let is_date_or_weather = q.contains("天气") || q.contains("气温") || q.contains("几号") || q.contains("星期几") || q.contains("周几");
+
+    // 4. 对非查日历/天气的普通提问，将“今天/今日/现在”替换为“最新”，彻底避免触发搜索引擎的日历/黄历意图！
+    if !is_date_or_weather {
+        q = q.replace("今天", "最新 ")
+             .replace("今日", "最新 ")
+             .replace("现在", "最新 ")
+             .replace("目前", "最新 ")
+             .replace("当前", "最新 ");
+    }
+
+    q = q.replace("有什么", " ")
+         .replace("有哪些", " ")
+         .replace("吗", "")
+         .replace("呢", "");
+
+    q.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn is_junk_result(title: &str, query: &str) -> bool {
+    let is_calendar_query = query.contains("黄历") || query.contains("日历") || query.contains("农历") || query.contains("吉日") || query.contains("星期");
+    if !is_calendar_query {
+        let junk_keywords = ["黄历", "老黄历", "日历网", "黄道吉日", "万年历", "历史上的今天"];
+        for junk in &junk_keywords {
+            if title.contains(junk) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 async fn search_bing(client: &reqwest::Client, query: &str) -> Result<Vec<SearchResult>, String> {
+    let cleaned_query = clean_search_query(query);
+    let search_term = if cleaned_query.is_empty() { query } else { &cleaned_query };
+
     let resp = client
         .get("https://cn.bing.com/search")
-        .query(&[("q", query), ("setlang", "zh-hans")])
+        .query(&[("q", search_term), ("setlang", "zh-hans")])
         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
         .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
         .timeout(Duration::from_secs(8))
@@ -160,7 +222,10 @@ async fn search_bing(client: &reqwest::Client, query: &str) -> Result<Vec<Search
     let mut results = Vec::new();
 
     let blocks: Vec<&str> = html.split("<li class=\"b_algo\"").collect();
-    for block in blocks.iter().skip(1).take(5) {
+    for block in blocks.iter().skip(1).take(8) {
+        if results.len() >= 5 {
+            break;
+        }
         if let Some(end_idx) = block.find("</li>") {
             let item = &block[..end_idx];
             let title_raw = extract_tag_content(item, "h2");
@@ -170,6 +235,12 @@ async fn search_bing(client: &reqwest::Client, query: &str) -> Result<Vec<Search
             if let (Some(title_html), Some(link_url)) = (title_raw, link) {
                 let clean_title = strip_html_tags(&title_html);
                 let clean_snippet = snippet_raw.map(|s| strip_html_tags(&s)).unwrap_or_default();
+                
+                // 排除无关黄历/日历等垃圾站
+                if is_junk_result(&clean_title, query) {
+                    continue;
+                }
+
                 if !clean_title.is_empty() {
                     results.push(SearchResult {
                         title: clean_title,
