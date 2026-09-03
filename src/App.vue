@@ -14,7 +14,7 @@ import SettingsModal from './components/SettingsModal.vue';
 import TaskItem from './components/TaskItem.vue';
 import InlineTaskCard from './components/InlineTaskCard.vue';
 import CalendarView from './components/CalendarView.vue';
-import AISummaryDrawer from './components/AISummaryDrawer.vue';
+import AIChatView from './components/AIChatView.vue';
 import Toast from './components/Toast.vue';
 import UpdateModal from './components/UpdateModal.vue';
 import ChangelogModal from './components/ChangelogModal.vue';
@@ -34,7 +34,6 @@ const showInlineCreate = ref(false);
 const searchQuery = ref('');
 const activeCategory = ref('today');
 const showSettingsModal = ref(false);
-const showAIDrawer = ref(false);
 let checkInterval: number;
 
 const syncCurrentTime = () => {
@@ -501,12 +500,12 @@ const closeWindow = () => getCurrentWindow().close();
       <div class="header-left" data-tauri-drag-region style="flex-grow: 1; z-index: 10;">
         <div style="pointer-events: none;">
           <h1>
-            {{ activeCategory === 'today' ? '今天' : activeCategory === 'completed' ? '已完成' : activeCategory === 'calendar' ? '日历视图' : '全部任务' }}
+            {{ activeCategory === 'today' ? '今天' : activeCategory === 'completed' ? '已完成' : activeCategory === 'calendar' ? '日历视图' : activeCategory === 'ai-chat' ? 'AI 助手' : '全部任务' }}
           </h1>
           <div class="date">{{ headerSubTitle }}</div>
         </div>
       </div>
-      <div class="header-right" style="z-index: 11;">
+      <div class="header-right" style="z-index: 11;" v-if="activeCategory !== 'ai-chat'">
         <div class="search-box">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input type="text" placeholder="搜索任务..." v-model="searchQuery">
@@ -533,6 +532,10 @@ const closeWindow = () => getCurrentWindow().close();
       @open-create="handleAddTaskClick"
       @switch-to-list="activeCategory = 'all'"
     />
+
+    <div v-else-if="activeCategory === 'ai-chat'" class="ai-chat-page">
+      <AIChatView :todos="todos" />
+    </div>
 
     <div v-else class="task-list">
       <!-- Create Card Section when active -->
@@ -596,18 +599,6 @@ const closeWindow = () => getCurrentWindow().close();
     </div>
   </main>
 
-  <!-- Floating AI Action Button -->
-  <button class="ai-fab-btn" @click="showAIDrawer = true" title="AI 每日总结">
-    <span class="fab-sparkle">✨</span>
-    <span class="fab-text">AI 总结</span>
-  </button>
-
-  <AISummaryDrawer 
-    :isOpen="showAIDrawer"
-    :todos="todos"
-    @close="showAIDrawer = false"
-  />
-
   <SettingsModal :show="showSettingsModal" @close="showSettingsModal = false" />
   <Toast />
 
@@ -628,3 +619,14 @@ const closeWindow = () => getCurrentWindow().close();
     @close="showChangelogModal = false"
   />
 </template>
+
+<style scoped>
+/* AI 助手页包装容器：占据 header 之下、主区内的剩余高度 */
+.ai-chat-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.5rem;
+}
+</style>
