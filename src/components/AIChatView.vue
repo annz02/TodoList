@@ -212,6 +212,36 @@ function parseDSMLToolCalls(text: string) {
   return calls;
 }
 
+function normalizeTaskName(s: string): string {
+  return s
+    .replace(/[「」【】“”"'\s\t`·]/g, '')
+    .replace(/(任务|待办|事项)$/, '')
+    .toLowerCase();
+}
+
+function findTaskInList(tasks: Todo[], query: string): Todo | undefined {
+  if (!query) return undefined;
+  const raw = query.trim();
+  // 1. Direct ID match
+  let t = tasks.find((x) => x.id === raw);
+  if (t) return t;
+
+  const cleanQ = normalizeTaskName(raw);
+  if (!cleanQ) return undefined;
+
+  // 2. Exact clean title match
+  t = tasks.find((x) => normalizeTaskName(x.title) === cleanQ);
+  if (t) return t;
+
+  // 3. Bidirectional inclusion match
+  t = tasks.find((x) => {
+    const cleanT = normalizeTaskName(x.title);
+    if (!cleanT) return false;
+    return cleanT.includes(cleanQ) || cleanQ.includes(cleanT);
+  });
+  return t;
+}
+
 
 // ---------------------------------------------------------------------------
 // Single-connection model manager (settings page + the chat model chip)
@@ -438,15 +468,16 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
           tail.steps.push(step);
           await scrollToBottom();
 
-          if (taskTitleOrId) {
+          const target = findTaskInList(props.todos, taskTitleOrId);
+          if (target) {
             emit('update-task', {
-              taskTitleOrId,
+              taskTitleOrId: target.id,
               newTitle: newTitle || undefined,
               newCategory: newCategory || undefined,
               newDueDate: newDueDate || undefined,
             });
             step.status = 'done';
-            step.title = `已修改待办任务：「${newTitle || taskTitleOrId}」`;
+            step.title = `已修改待办任务：「${newTitle || target.title}」`;
             await scrollToBottom();
 
             conversation.push({
@@ -455,18 +486,21 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
               name: toolName,
               content: JSON.stringify({
                 success: true,
-                message: `待办任务「${taskTitleOrId}」已成功修改更新！${newTitle ? `新标题：${newTitle}` : ''}`,
+                message: `待办任务「${target.title}」已成功修改更新！${newTitle ? `新标题：${newTitle}` : ''}`,
               }),
             });
           } else {
             step.status = 'error';
-            step.title = '修改任务失败：未指定任务';
+            step.title = `未找到待修改任务：「${taskTitleOrId}」`;
             await scrollToBottom();
             conversation.push({
               role: 'tool',
               tool_call_id: call.id,
               name: toolName,
-              content: JSON.stringify({ success: false, error: '缺少任务标识' }),
+              content: JSON.stringify({
+                success: false,
+                error: `未在待办列表中找到任务「${taskTitleOrId}」，当前已有任务：${props.todos.map((t) => t.title).join('、') || '暂无'}`,
+              }),
             });
           }
         } else if (toolName === 'complete_task') {
@@ -479,10 +513,11 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
           tail.steps.push(step);
           await scrollToBottom();
 
-          if (taskTitleOrId) {
-            emit('complete-task', taskTitleOrId);
+          const target = findTaskInList(props.todos, taskTitleOrId);
+          if (target) {
+            emit('complete-task', target.id);
             step.status = 'done';
-            step.title = `已将任务标记为完成：「${taskTitleOrId}」`;
+            step.title = `已将任务标记为完成：「${target.title}」`;
             await scrollToBottom();
 
             conversation.push({
@@ -491,18 +526,21 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
               name: toolName,
               content: JSON.stringify({
                 success: true,
-                message: `任务「${taskTitleOrId}」已成功标记为完成！`,
+                message: `待办任务「${target.title}」已成功标记为完成！`,
               }),
             });
           } else {
             step.status = 'error';
-            step.title = '标记任务失败：未指定任务';
+            step.title = `未找到待完成任务：「${taskTitleOrId}」`;
             await scrollToBottom();
             conversation.push({
               role: 'tool',
               tool_call_id: call.id,
               name: toolName,
-              content: JSON.stringify({ success: false, error: '缺少任务标识' }),
+              content: JSON.stringify({
+                success: false,
+                error: `未在待办列表中找到任务「${taskTitleOrId}」，当前已有任务：${props.todos.map((t) => t.title).join('、') || '暂无'}`,
+              }),
             });
           }
         } else if (toolName === 'delete_task') {
@@ -515,10 +553,11 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
           tail.steps.push(step);
           await scrollToBottom();
 
-          if (taskTitleOrId) {
-            emit('delete-task', taskTitleOrId);
+          const target = findTaskInList(props.todos, taskTitleOrId);
+          if (target) {
+            emit('delete-task', target.id);
             step.status = 'done';
-            step.title = `已删除待办任务：「${taskTitleOrId}」`;
+            step.title = `已删除待办任务：「${target.title}」`;
             await scrollToBottom();
 
             conversation.push({
@@ -527,18 +566,21 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
               name: toolName,
               content: JSON.stringify({
                 success: true,
-                message: `待办任务「${taskTitleOrId}」已成功从 Todolist 中删除！`,
+                message: `待办任务「${target.title}」已成功从 Todolist 中删除！`,
               }),
             });
           } else {
             step.status = 'error';
-            step.title = '删除任务失败：未指定任务';
+            step.title = `未找到待删除任务：「${taskTitleOrId}」`;
             await scrollToBottom();
             conversation.push({
               role: 'tool',
               tool_call_id: call.id,
               name: toolName,
-              content: JSON.stringify({ success: false, error: '缺少任务标识' }),
+              content: JSON.stringify({
+                success: false,
+                error: `未在待办列表中找到任务「${taskTitleOrId}」，当前已有任务：${props.todos.map((t) => t.title).join('、') || '暂无'}`,
+              }),
             });
           }
         } else if (toolName === 'web_search') {

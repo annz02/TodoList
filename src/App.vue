@@ -482,12 +482,40 @@ const handleCreateTaskFromAI = (data: { title: string; category?: string; dueDat
   return newTask;
 };
 
+const normalizeTaskName = (s: string) => {
+  return s
+    .replace(/[「」【】“”"'\s\t`·]/g, '')
+    .replace(/(任务|待办|事项)$/, '')
+    .toLowerCase();
+};
+
+const findTaskIndexByAI = (query: string): number => {
+  if (!query) return -1;
+  const raw = query.trim();
+  // 1. Direct ID match
+  let idx = todos.value.findIndex((t) => t.id === raw);
+  if (idx !== -1) return idx;
+
+  const cleanQ = normalizeTaskName(raw);
+  if (!cleanQ) return -1;
+
+  // 2. Exact clean title match
+  idx = todos.value.findIndex((t) => normalizeTaskName(t.title) === cleanQ);
+  if (idx !== -1) return idx;
+
+  // 3. Bidirectional inclusion match
+  idx = todos.value.findIndex((t) => {
+    const cleanT = normalizeTaskName(t.title);
+    if (!cleanT) return false;
+    return cleanT.includes(cleanQ) || cleanQ.includes(cleanT);
+  });
+  return idx;
+};
+
 const handleCompleteTaskFromAI = (titleOrId: string) => {
-  const query = titleOrId.trim().toLowerCase();
-  const t = todos.value.find(
-    (x) => x.id === query || x.title.toLowerCase().includes(query),
-  );
-  if (t) {
+  const index = findTaskIndexByAI(titleOrId);
+  if (index !== -1) {
+    const t = todos.value[index];
     t.completed = true;
     t.completedAt = new Date().toISOString();
     saveTodos();
@@ -497,10 +525,7 @@ const handleCompleteTaskFromAI = (titleOrId: string) => {
 };
 
 const handleDeleteTaskFromAI = (titleOrId: string): Todo | null => {
-  const query = titleOrId.trim().toLowerCase();
-  const index = todos.value.findIndex(
-    (x) => x.id === query || x.title.toLowerCase().includes(query),
-  );
+  const index = findTaskIndexByAI(titleOrId);
   if (index !== -1) {
     const deleted = todos.value.splice(index, 1)[0];
     saveTodos();
@@ -515,11 +540,9 @@ const handleUpdateTaskFromAI = (data: {
   newCategory?: string;
   newDueDate?: string;
 }): Todo | null => {
-  const query = data.taskTitleOrId.trim().toLowerCase();
-  const task = todos.value.find(
-    (x) => x.id === query || x.title.toLowerCase().includes(query),
-  );
-  if (task) {
+  const index = findTaskIndexByAI(data.taskTitleOrId);
+  if (index !== -1) {
+    const task = todos.value[index];
     if (data.newTitle) task.title = data.newTitle;
     if (data.newCategory) task.category = data.newCategory;
     if (data.newDueDate) {
