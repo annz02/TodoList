@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Todo } from '../types';
 import { useAIConfig } from '../composables/useAIConfig';
 import { useAIAssistant } from '../composables/useAIAssistant';
-import { useChatStream, type ChatMessage } from '../composables/useChatStream';
+import { useChatStream, type ChatMessage, type ToolDefinition } from '../composables/useChatStream';
 import { useWebSearch, type SearchResult } from '../composables/useWebSearch';
 import { renderMarkdown } from '../utils/markdown';
 
@@ -28,8 +28,63 @@ const {
   setTavilyApiKey,
 } = useAIConfig();
 const { sendChat } = useChatStream();
-const { search } = useWebSearch();
+const { search, fetchWebpage } = useWebSearch();
 const assistant = useAIAssistant(computed(() => props.todos));
+
+export interface AgentStep {
+  name: string;
+  title: string;
+  status: 'running' | 'done' | 'error';
+}
+
+const AGENT_TOOLS: ToolDefinition[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'web_search',
+      description: '在互联网上搜索最新资讯、实时天气、新闻热点或外部实时事实。当你需要了解最新的事实数据时调用此工具。',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: '提纯后的核心搜索关键词短语，去除“今天有什么”、“请帮我查”等口语化停用词',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'fetch_webpage',
+      description: '深入阅读某一个具体网页链接的完整正文内容。当搜索结果摘要不够详尽或需要获取文章深层细节时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description: '网页完整链接 URL（通常来自 web_search 返回的 link 字段）',
+          },
+        },
+        required: ['url'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_today_tasks',
+      description: '查询用户在当前 Todolist 中的今日任务列表、各分类进度与完成统计。',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+];
+
 
 // ---------------------------------------------------------------------------
 // Single-connection model manager (settings page + the chat model chip)
@@ -82,7 +137,7 @@ interface LocalMsg {
   role: 'user' | 'assistant';
   content: string;
   sources?: SearchResult[];
-  isSearching?: boolean;
+  steps?: AgentStep[];
 }
 let idSeq = 1;
 const messages = ref<LocalMsg[]>([]);
@@ -117,62 +172,182 @@ const scrollToBottom = async () => {
 
 const lastAssistant = (): LocalMsg => messages.value[messages.value.length - 1];
 
-const toApiMessages = (searchContext = ''): ChatMessage[] => {
-  const system = apiKey.value.trim()
-    ? '你是 Todolist 内置的 AI 助手，可协助用户整理待办、分析任务、总结每日工作日报。当前已具备实时网络检索能力，若上下文中包含实时网络检索信息，请结合检索信息进行准确回答。回答请简洁、准确、使用中文。'
-    : '你是 Todolist 内置的 AI 助手。当前未配置大模型 API，仅能根据内置规则生成工作日报。请友好提醒用户在下方模型选择器中选择并配置模型。';
-
-  const history: ChatMessage[] = [];
-  const list = messages.value;
-  for (let i = 0; i < list.length; i++) {
-    const m = list[i];
-    if (i === list.length - 1 && m.role === 'assistant') {
-      continue;
-    }
-    if (m.role === 'user' && i === list.length - 2 && searchContext) {
-      history.push({ role: m.role, content: m.content + searchContext });
-    } else {
-      history.push({ role: m.role, content: m.content });
-    }
-  }
-
-  return [
-    { role: 'system', content: system },
-    ...history,
-  ];
-};
-
 /**
- * Run a completion against the current tail assistant message.
- * Pushes an empty assistant message if the last is not empty (never happens in
- * our flows except the direct-report branch which pre-pushes one).
+ * Antigravity Agentic Loop: executes multi-turn tool calling autonomously.
  */
-async function streamInto(tail: LocalMsg, searchContext = ''): Promise<boolean> {
+async function streamInto(tail: LocalMsg): Promise<boolean> {
   const ctrl = new AbortController();
   abortCtrl.value = ctrl;
   isWaiting.value = true;
   const stream = streaming.value;
-  // Snapshot the connection so a mid-flight switch can't retarget this request.
   const cfg = connection.value;
+
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 星期${['日', '一', '二', '三', '四', '五', '六'][now.getDay()]}`;
+
+  const system = apiKey.value.trim()
+    ? `你是 Todolist 内置的智能助手（基于 Antigravity Agent 智能体架构）。当前时间：${dateStr}。\n你具备网络搜索 (web_search)、网页深读 (fetch_webpage) 及待办任务查询 (get_today_tasks) 工具。遇到需要实时事实、突发资讯、天气、外部知识或用户今日待办的问题，请主动自主调用工具获取真实数据后再回答。回答请准确、专业、清晰并使用中文。`
+    : '你是 Todolist 内置的 AI 助手。当前未配置大模型 API，仅能根据内置规则生成工作日报。请友好提醒用户在下方模型选择器中选择并配置模型。';
+
+  const conversation: ChatMessage[] = [
+    { role: 'system', content: system },
+    ...messages.value.slice(0, -1).map((m) => ({
+      role: m.role as 'system' | 'user' | 'assistant' | 'tool',
+      content: m.content,
+    })),
+  ];
+
   try {
-    const full = await sendChat({
-      endpoint: cfg.endpoint,
-      apiKey: cfg.apiKey,
-      model: cfg.model,
-      messages: toApiMessages(searchContext),
-      stream,
-      signal: ctrl.signal,
-      onChunk: (chunk) => {
-        tail.content += chunk;
-        scrollToBottom();
-      },
-    });
-    if (!stream && full) tail.content = full;
-    if (stream && !tail.content) tail.content = full || '（模型返回了空回复，请稍后重试）';
-    await scrollToBottom();
+    const MAX_TURNS = 3;
+    let turn = 0;
+
+    while (turn < MAX_TURNS) {
+      turn++;
+      const tools = webSearch.value ? AGENT_TOOLS : undefined;
+
+      const result = await sendChat({
+        endpoint: cfg.endpoint,
+        apiKey: cfg.apiKey,
+        model: cfg.model,
+        messages: conversation,
+        tools,
+        stream,
+        signal: ctrl.signal,
+        onChunk: (chunk) => {
+          tail.content += chunk;
+          scrollToBottom();
+        },
+      });
+
+      // No tool calls => final response received!
+      if (!result.toolCalls || result.toolCalls.length === 0) {
+        if (!stream && result.content) tail.content = result.content;
+        if (stream && !tail.content) tail.content = result.content || '（模型返回了空回复，请稍后重试）';
+        await scrollToBottom();
+        return true;
+      }
+
+      // The model decided to invoke tools (Antigravity Agent Action)
+      conversation.push({
+        role: 'assistant',
+        content: result.content || '',
+        tool_calls: result.toolCalls,
+      });
+
+      // Reset partial content for tool turn
+      tail.content = '';
+
+      for (const call of result.toolCalls) {
+        if (ctrl.signal.aborted) break;
+        const toolName = call.function.name;
+        let args: any = {};
+        try {
+          args = JSON.parse(call.function.arguments || '{}');
+        } catch {
+          args = {};
+        }
+
+        if (!tail.steps) tail.steps = [];
+
+        if (toolName === 'web_search') {
+          const query = (args.query || '').trim();
+          const step: AgentStep = {
+            name: 'web_search',
+            title: `网络检索：${query || '实时信息'}`,
+            status: 'running',
+          };
+          tail.steps.push(step);
+          await scrollToBottom();
+
+          const results = await search(query, {
+            engine: searchEngine.value,
+            api_key: tavilyApiKey.value,
+          });
+
+          if (!tail.sources) tail.sources = [];
+          for (const r of results) {
+            if (!tail.sources.some((x) => x.link === r.link)) {
+              tail.sources.push(r);
+            }
+          }
+          step.status = 'done';
+          step.title = `网络检索完成：已获取 ${results.length} 条相关资讯`;
+          await scrollToBottom();
+
+          conversation.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            name: toolName,
+            content: JSON.stringify(
+              results.map((r, i) => ({
+                index: i + 1,
+                title: r.title,
+                link: r.link,
+                snippet: r.snippet,
+                source: r.source,
+              })),
+            ),
+          });
+        } else if (toolName === 'fetch_webpage') {
+          const url = (args.url || '').trim();
+          const step: AgentStep = {
+            name: 'fetch_webpage',
+            title: `深入阅读网页：${url}`,
+            status: 'running',
+          };
+          tail.steps.push(step);
+          await scrollToBottom();
+
+          const text = await fetchWebpage(url);
+          step.status = 'done';
+          step.title = `网页阅读完成 (${text.length} 字)`;
+          await scrollToBottom();
+
+          conversation.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            name: toolName,
+            content: text || '（未能获取网页文本内容）',
+          });
+        } else if (toolName === 'get_today_tasks') {
+          const step: AgentStep = {
+            name: 'get_today_tasks',
+            title: `查询 Todolist 今日任务进度`,
+            status: 'running',
+          };
+          tail.steps.push(step);
+          await scrollToBottom();
+
+          const st = assistant.stats.value;
+          const tasksInfo = {
+            total: st.todayTasks.length,
+            completed: st.completedToday.map((t) => t.title),
+            pending: st.pendingToday.map((t) => t.title),
+            completionRate: `${st.completionRate}%`,
+          };
+          step.status = 'done';
+          step.title = `已获取今日待办：共 ${st.todayTasks.length} 项（完成率 ${st.completionRate}%）`;
+          await scrollToBottom();
+
+          conversation.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            name: toolName,
+            content: JSON.stringify(tasksInfo),
+          });
+        } else {
+          conversation.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            name: toolName,
+            content: JSON.stringify({ error: `未知的工具: ${toolName}` }),
+          });
+        }
+      }
+    }
+
     return true;
   } catch (err: any) {
-    // Distinguish a user-initiated abort from a real failure.
     if (ctrl.signal.aborted) {
       if (!tail.content) tail.content = '⏹️ 已停止生成。';
     } else {
@@ -195,42 +370,16 @@ const sendMessage = async () => {
   input.value = '';
   autoGrowTextarea();
   messages.value.push({ id: idSeq++, role: 'user', content: text });
-  const tail: LocalMsg = { id: idSeq++, role: 'assistant', content: '', sources: [], isSearching: false };
+  const tail: LocalMsg = { id: idSeq++, role: 'assistant', content: '', sources: [], steps: [] };
   messages.value.push(tail);
   await scrollToBottom();
 
-  if (!apiKey.value.trim()) {
+  if (apiKey.value.trim()) {
+    await streamInto(tail);
+  } else {
     tail.content = '（尚未配置 API Key，请在输入框下方或 ⚙️ 模型配置中填写后即可与我对话；通用问答需要模型支持。）';
     await scrollToBottom();
-    return;
   }
-
-  let searchContext = '';
-  if (webSearch.value) {
-    tail.isSearching = true;
-    isWaiting.value = true;
-    try {
-      const results = await search(text, {
-        engine: searchEngine.value,
-        api_key: tavilyApiKey.value,
-      });
-      if (results && results.length > 0) {
-        tail.sources = results;
-        const now = new Date();
-        const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
-        const snippets = results
-          .map((r, i) => `[${i + 1}] 来源: ${r.source}\n标题: ${r.title}\n链接: ${r.link}\n内容: ${r.snippet}`)
-          .join('\n\n');
-        searchContext = `\n\n---\n【网络实时检索结果（当前日期：${dateStr}）】：\n${snippets}\n\n【回答要求】：请结合上述最新的网络实时检索信息，准确、清晰且有条理地回答用户的问题。在适当时可以自然标注信息来源。`;
-      }
-    } catch (e) {
-      console.warn('Web search failed:', e);
-    } finally {
-      tail.isSearching = false;
-    }
-  }
-
-  await streamInto(tail, searchContext);
 };
 
 const onKeydown = (e: KeyboardEvent) => {
@@ -394,10 +543,14 @@ const currentTypingMsg = computed(() =>
             </div>
             <div class="bubble" :class="msg.role">
               <template v-if="msg.role === 'assistant'">
-                <!-- Searching state -->
-                <div v-if="msg.isSearching" class="search-indicator">
-                  <span class="search-spinner"></span>
-                  <span class="search-text">正在网络检索实时信息…</span>
+                <!-- Antigravity Agent steps trail -->
+                <div v-if="msg.steps && msg.steps.length > 0" class="agent-steps">
+                  <div v-for="(st, sIdx) in msg.steps" :key="sIdx" class="agent-step-item" :class="st.status">
+                    <span v-if="st.status === 'running'" class="agent-step-spinner"></span>
+                    <svg v-else-if="st.status === 'done'" class="agent-step-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    <svg v-else class="agent-step-err" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    <span class="agent-step-title">{{ st.title }}</span>
+                  </div>
                 </div>
 
                 <div class="md-content" v-html="renderMarkdown(msg.content)"></div>
@@ -434,7 +587,7 @@ const currentTypingMsg = computed(() =>
                 </div>
 
                 <span
-                  v-if="isWaiting && msg.id === currentTypingMsg && msg.content === '' && !msg.isSearching"
+                  v-if="isWaiting && msg.id === currentTypingMsg && msg.content === '' && (!msg.steps || !msg.steps.some((s) => s.status === 'running'))"
                   class="typing"
                 >
                   <i></i><i></i><i></i>
@@ -1138,23 +1291,52 @@ const currentTypingMsg = computed(() =>
   font-weight: 500;
 }
 
-/* Search status banner inside assistant message bubble */
-.search-indicator {
+/* Antigravity Agent Execution Steps */
+.agent-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--primary-color) 7%, var(--bg-main));
+  border: 1px solid color-mix(in srgb, var(--primary-color) 18%, transparent);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.agent-step-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 0 8px;
+  gap: 7px;
+  color: var(--text-secondary);
+}
+.agent-step-item.running {
   color: var(--primary-color);
-  font-size: 12.5px;
   font-weight: 500;
 }
-.search-spinner {
-  width: 13px;
-  height: 13px;
-  border: 2px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+.agent-step-item.done {
+  color: var(--text-secondary);
+}
+.agent-step-spinner {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border: 2px solid color-mix(in srgb, var(--primary-color) 25%, transparent);
   border-top-color: var(--primary-color);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+}
+.agent-step-check {
+  flex-shrink: 0;
+  color: var(--success-color, #16a34a);
+}
+.agent-step-err {
+  flex-shrink: 0;
+  color: var(--danger-color, #ef4444);
+}
+.agent-step-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 @keyframes spin {
   to { transform: rotate(360deg); }

@@ -356,3 +356,50 @@ pub async fn web_search(query: String, options: Option<SearchOptions>) -> Result
 
     Ok(results)
 }
+
+#[tauri::command]
+pub async fn fetch_webpage(url: String) -> Result<String, String> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return Ok(String::new());
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(8))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client
+        .get(trimmed)
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+        .send()
+        .await
+        .map_err(|e| format!("请求失败: {}", e))?;
+
+    let html = resp.text().await.map_err(|e| format!("读取网页失败: {}", e))?;
+
+    // Remove scripts and styles
+    let mut clean = html;
+    while let Some(start) = clean.find("<script") {
+        if let Some(end) = clean[start..].find("</script>") {
+            clean.replace_range(start..start + end + 9, " ");
+        } else {
+            break;
+        }
+    }
+    while let Some(start) = clean.find("<style") {
+        if let Some(end) = clean[start..].find("</style>") {
+            clean.replace_range(start..start + end + 8, " ");
+        } else {
+            break;
+        }
+    }
+
+    let text = strip_html_tags(&clean);
+    if text.chars().count() > 2500 {
+        let truncated: String = text.chars().take(2500).collect();
+        Ok(format!("{}...\n(正文已截断)", truncated))
+    } else {
+        Ok(text)
+    }
+}

@@ -1,12 +1,45 @@
-export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
+export type ChatToolCall = {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    arguments: string;
+  };
+};
+
+export type ChatMessage = {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string;
+  name?: string;
+  tool_call_id?: string;
+  tool_calls?: ChatToolCall[];
+};
+
+export interface ToolDefinition {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, any>;
+  };
+}
+
+export interface ChatCompletionResult {
+  content: string;
+  toolCalls?: ChatToolCall[];
+}
+
+type SSEDelta =
+  | { type: 'content'; text: string }
+  | { type: 'tool_call'; delta: any };
 
 const decoder = new TextDecoder();
 
 /**
  * Reads an OpenAI/DeepSeek-compatible `stream:true` chat response body and
- * yields the incremental `delta.content` chunks as they arrive.
+ * yields incremental text content or tool_calls deltas.
  */
-async function* streamSSE(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncGenerator<string, void, unknown> {
+async function* streamSSE(reader: ReadableStreamDefaultReader<Uint8Array>): AsyncGenerator<SSEDelta, void, unknown> {
   let buffer = '';
   while (true) {
     const { done, value } = await reader.read();
@@ -22,8 +55,16 @@ async function* streamSSE(reader: ReadableStreamDefaultReader<Uint8Array>): Asyn
       if (!data || data === '[DONE]') continue;
       try {
         const json = JSON.parse(data);
-        const delta: string | undefined = json?.choices?.[0]?.delta?.content;
-        if (delta) yield delta;
+        const choice = json?.choices?.[0];
+        const delta = choice?.delta;
+        if (delta?.content) {
+          yield { type: 'content', text: delta.content };
+        }
+        if (delta?.tool_calls && Array.isArray(delta.tool_calls)) {
+          for (const tc of delta.tool_calls) {
+            yield { type: 'tool_call', delta: tc };
+          }
+        }
       } catch {
         /* skip malformed keep-alive frame */
       }
@@ -33,11 +74,7 @@ async function* streamSSE(reader: ReadableStreamDefaultReader<Uint8Array>): Asyn
 
 export function useChatStream() {
   /**
-   * Send a chat completion request.
-   *
-   * @returns an async function that streams content deltas through
-   *          `onChunk` and resolves with the full message. Provide `signal`
-   *          (an AbortSignal from an AbortController) to stop generation.
+   * Send a chat completion request with optional tool calling support.
    */
   async function sendChat(
     opts: {
@@ -45,15 +82,27 @@ export function useChatStream() {
       apiKey: string;
       model: string;
       messages: ChatMessage[];
+      tools?: ToolDefinition[];
       stream?: boolean;
       signal?: AbortSignal;
       onChunk: (chunk: string) => void;
     },
-  ): Promise<string> {
-    const { endpoint, apiKey, model, messages, stream = true, signal, onChunk } = opts;
-    // Messages sent to the API should never carry empty output artifacts.
+  ): Promise<ChatCompletionResult> {
+    const { endpoint, apiKey, model, messages, tools, stream = true, signal, onChunk } = opts;
     const payloadMessages = messages.filter((m) => m.role !== 'system' || m.content.trim() !== '');
     const base = trimEndpoint(endpoint);
+
+    const bodyPayload: Record<string, any> = {
+      model,
+      messages: payloadMessages,
+      stream,
+      temperature: 0.6,
+    };
+
+    if (tools && tools.length > 0) {
+      bodyPayload.tools = tools;
+      bodyPayload.tool_choice = 'auto';
+    }
 
     const response = await fetch(`${base}/chat/completions`, {
       method: 'POST',
@@ -61,12 +110,7 @@ export function useChatStream() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model,
-        messages: payloadMessages,
-        stream,
-        temperature: 0.7,
-      }),
+      body: JSON.stringify(bodyPayload),
       signal,
     });
 
@@ -83,21 +127,51 @@ export function useChatStream() {
 
     if (!stream) {
       const data = await response.json();
-      return data?.choices?.[0]?.message?.content || '';
+      const choice = data?.choices?.[0];
+      const content = choice?.message?.content || '';
+      const toolCalls = choice?.message?.tool_calls;
+      return { content, toolCalls };
     }
 
-    if (!response.body) return '';
+    if (!response.body) return { content: '' };
     const reader = response.body.getReader();
     let full = '';
+    const toolMap: Record<number, { id: string; name: string; args: string }> = {};
+
     try {
       for await (const chunk of streamSSE(reader)) {
-        full += chunk;
-        onChunk(chunk);
+        if (chunk.type === 'content') {
+          full += chunk.text;
+          onChunk(chunk.text);
+        } else if (chunk.type === 'tool_call') {
+          const tc = chunk.delta;
+          const idx = tc.index ?? 0;
+          if (!toolMap[idx]) {
+            toolMap[idx] = { id: '', name: '', args: '' };
+          }
+          if (tc.id) toolMap[idx].id = tc.id;
+          if (tc.function?.name) toolMap[idx].name += tc.function.name;
+          if (tc.function?.arguments) toolMap[idx].args += tc.function.arguments;
+        }
       }
     } finally {
       reader.releaseLock();
     }
-    return full;
+
+    const toolIndices = Object.keys(toolMap).map(Number);
+    let toolCalls: ChatToolCall[] | undefined;
+    if (toolIndices.length > 0) {
+      toolCalls = toolIndices.map((i) => ({
+        id: toolMap[i].id || `call_${Date.now()}_${i}`,
+        type: 'function' as const,
+        function: {
+          name: toolMap[i].name,
+          arguments: toolMap[i].args,
+        },
+      }));
+    }
+
+    return { content: full, toolCalls };
   }
 
   return { sendChat };

@@ -28,5 +28,17 @@ export function useWebSearch() {
     }
   }
 
-  return { search };
+  async function fetchWebpage(url: string): Promise<string> {
+    const trimmed = url.trim();
+    if (!trimmed) return '';
+    try {
+      const text = await invoke<string>('fetch_webpage', { url: trimmed });
+      return text || '';
+    } catch (err: any) {
+      console.warn('Fetch webpage failed:', err);
+      return '';
+    }
+  }
+
+  return { search, fetchWebpage };
 }
