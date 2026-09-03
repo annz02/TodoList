@@ -11,6 +11,10 @@ export const DEFAULT_MODEL = 'deepseek-chat';
 const KEY_CONNECTION = 'ai_connection'; // JSON { endpoint, apiKey, models, activeModel }
 // Reused key so the existing streaming preference survives.
 const KEY_STREAMING = 'ai_chat_streaming';
+const KEY_WEB_SEARCH = 'ai_chat_web_search';
+const KEY_SEARCH_ENGINE = 'ai_chat_search_engine';
+const KEY_TAVILY_KEY = 'ai_chat_tavily_key';
+
 
 const loadBool = (key: string, fallback: boolean): boolean => {
   const raw = localStorage.getItem(key);
@@ -69,6 +73,9 @@ const apiKey = ref<string>(initial.apiKey);
 const models = ref<string[]>(initial.models);
 const activeModel = ref<string | null>(initial.activeModel);
 const streaming = ref(loadBool(KEY_STREAMING, true));
+const webSearch = ref(loadBool(KEY_WEB_SEARCH, true));
+const searchEngine = ref(localStorage.getItem(KEY_SEARCH_ENGINE) || 'builtin');
+const tavilyApiKey = ref(localStorage.getItem(KEY_TAVILY_KEY) || '');
 
 const persist = () => {
   localStorage.setItem(
@@ -102,12 +109,18 @@ export interface AIConfigStore {
   activeModelName: ComputedRef<string>;
   connection: typeof connectionCfg;
   streaming: Ref<boolean>;
+  webSearch: Ref<boolean>;
+  searchEngine: Ref<string>;
+  tavilyApiKey: Ref<string>;
   setConnection: (ep: string, key: string) => void;
   setModels: (names: string[], active: string | null) => void;
   addModel: (name: string) => void;
   removeModel: (name: string) => void;
   setActiveModel: (name: string) => void;
   setStreaming: (v: boolean) => void;
+  setWebSearch: (v: boolean) => void;
+  setSearchEngine: (v: string) => void;
+  setTavilyApiKey: (v: string) => void;
 }
 
 export function useAIConfig(): AIConfigStore {
@@ -160,6 +173,21 @@ export function useAIConfig(): AIConfigStore {
     localStorage.setItem(KEY_STREAMING, String(v));
   };
 
+  const setWebSearch = (v: boolean) => {
+    webSearch.value = v;
+    localStorage.setItem(KEY_WEB_SEARCH, String(v));
+  };
+
+  const setSearchEngine = (v: string) => {
+    searchEngine.value = v;
+    localStorage.setItem(KEY_SEARCH_ENGINE, v);
+  };
+
+  const setTavilyApiKey = (v: string) => {
+    tavilyApiKey.value = v.trim();
+    localStorage.setItem(KEY_TAVILY_KEY, v.trim());
+  };
+
   return {
     endpoint,
     apiKey,
@@ -168,11 +196,17 @@ export function useAIConfig(): AIConfigStore {
     activeModelName,
     connection: connectionCfg,
     streaming,
+    webSearch,
+    searchEngine,
+    tavilyApiKey,
     setConnection,
     setModels,
     addModel,
     removeModel,
     setActiveModel,
     setStreaming,
+    setWebSearch,
+    setSearchEngine,
+    setTavilyApiKey,
   };
 }

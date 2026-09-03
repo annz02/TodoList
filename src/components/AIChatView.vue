@@ -1,15 +1,34 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 import type { Todo } from '../types';
 import { useAIConfig } from '../composables/useAIConfig';
 import { useAIAssistant } from '../composables/useAIAssistant';
 import { useChatStream, type ChatMessage } from '../composables/useChatStream';
+import { useWebSearch, type SearchResult } from '../composables/useWebSearch';
 import { renderMarkdown } from '../utils/markdown';
 
 const props = defineProps<{ todos: Todo[] }>();
 
-const { endpoint, apiKey, models, connection, streaming, setConnection, setModels, setActiveModel, setStreaming } = useAIConfig();
+const {
+  endpoint,
+  apiKey,
+  models,
+  connection,
+  streaming,
+  webSearch,
+  searchEngine,
+  tavilyApiKey,
+  setConnection,
+  setModels,
+  setActiveModel,
+  setStreaming,
+  setWebSearch,
+  setSearchEngine,
+  setTavilyApiKey,
+} = useAIConfig();
 const { sendChat } = useChatStream();
+const { search } = useWebSearch();
 const assistant = useAIAssistant(computed(() => props.todos));
 
 // ---------------------------------------------------------------------------
@@ -18,6 +37,9 @@ const assistant = useAIAssistant(computed(() => props.todos));
 // Drafts for the ONE request address + API key (committed via 保存).
 const draftEndpoint = ref(endpoint.value);
 const draftApiKey = ref(apiKey.value);
+const draftWebSearch = ref(webSearch.value);
+const draftSearchEngine = ref(searchEngine.value);
+const draftTavilyKey = ref(tavilyApiKey.value);
 // Editable model rows under that connection — one input per model name.
 let draftSeq = 0;
 const draftModels = ref<{ id: number; name: string }[]>([]);
@@ -32,10 +54,35 @@ const isWaiting = ref(false);
 const abortCtrl = ref<AbortController | null>(null);
 const isReportRunning = ref(false);
 
+const openSourceMsgIds = ref<number[]>([]);
+const toggleSources = (msgId: number) => {
+  const idx = openSourceMsgIds.value.indexOf(msgId);
+  if (idx >= 0) {
+    openSourceMsgIds.value.splice(idx, 1);
+  } else {
+    openSourceMsgIds.value.push(msgId);
+  }
+};
+
+const openUrl = async (url: string) => {
+  if (!url) return;
+  try {
+    await invoke('open_url', { url });
+  } catch {
+    window.open(url, '_blank');
+  }
+};
+
+const toggleWebSearch = () => {
+  setWebSearch(!webSearch.value);
+};
+
 interface LocalMsg {
   id: number;
   role: 'user' | 'assistant';
   content: string;
+  sources?: SearchResult[];
+  isSearching?: boolean;
 }
 let idSeq = 1;
 const messages = ref<LocalMsg[]>([]);
@@ -70,13 +117,28 @@ const scrollToBottom = async () => {
 
 const lastAssistant = (): LocalMsg => messages.value[messages.value.length - 1];
 
-const toApiMessages = (): ChatMessage[] => {
+const toApiMessages = (searchContext = ''): ChatMessage[] => {
   const system = apiKey.value.trim()
-    ? '你是 Todolist 内置的 AI 助手，可协助用户整理待办、分析任务、总结每日工作日报。回答请简洁、准确、使用中文。'
+    ? '你是 Todolist 内置的 AI 助手，可协助用户整理待办、分析任务、总结每日工作日报。当前已具备实时网络检索能力，若上下文中包含实时网络检索信息，请结合检索信息进行准确回答。回答请简洁、准确、使用中文。'
     : '你是 Todolist 内置的 AI 助手。当前未配置大模型 API，仅能根据内置规则生成工作日报。请友好提醒用户在下方模型选择器中选择并配置模型。';
+
+  const history: ChatMessage[] = [];
+  const list = messages.value;
+  for (let i = 0; i < list.length; i++) {
+    const m = list[i];
+    if (i === list.length - 1 && m.role === 'assistant') {
+      continue;
+    }
+    if (m.role === 'user' && i === list.length - 2 && searchContext) {
+      history.push({ role: m.role, content: m.content + searchContext });
+    } else {
+      history.push({ role: m.role, content: m.content });
+    }
+  }
+
   return [
     { role: 'system', content: system },
-    ...messages.value.map((m) => ({ role: m.role, content: m.content })),
+    ...history,
   ];
 };
 
@@ -85,7 +147,7 @@ const toApiMessages = (): ChatMessage[] => {
  * Pushes an empty assistant message if the last is not empty (never happens in
  * our flows except the direct-report branch which pre-pushes one).
  */
-async function streamInto(tail: LocalMsg): Promise<boolean> {
+async function streamInto(tail: LocalMsg, searchContext = ''): Promise<boolean> {
   const ctrl = new AbortController();
   abortCtrl.value = ctrl;
   isWaiting.value = true;
@@ -97,7 +159,7 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
       endpoint: cfg.endpoint,
       apiKey: cfg.apiKey,
       model: cfg.model,
-      messages: toApiMessages(),
+      messages: toApiMessages(searchContext),
       stream,
       signal: ctrl.signal,
       onChunk: (chunk) => {
@@ -133,16 +195,42 @@ const sendMessage = async () => {
   input.value = '';
   autoGrowTextarea();
   messages.value.push({ id: idSeq++, role: 'user', content: text });
-  const tail = { id: idSeq++, role: 'assistant' as const, content: '' };
+  const tail: LocalMsg = { id: idSeq++, role: 'assistant', content: '', sources: [], isSearching: false };
   messages.value.push(tail);
   await scrollToBottom();
 
-  if (apiKey.value.trim()) {
-    await streamInto(tail);
-  } else {
+  if (!apiKey.value.trim()) {
     tail.content = '（尚未配置 API Key，请在输入框下方或 ⚙️ 模型配置中填写后即可与我对话；通用问答需要模型支持。）';
     await scrollToBottom();
+    return;
   }
+
+  let searchContext = '';
+  if (webSearch.value) {
+    tail.isSearching = true;
+    isWaiting.value = true;
+    try {
+      const results = await search(text, {
+        engine: searchEngine.value,
+        api_key: tavilyApiKey.value,
+      });
+      if (results && results.length > 0) {
+        tail.sources = results;
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+        const snippets = results
+          .map((r, i) => `[${i + 1}] 来源: ${r.source}\n标题: ${r.title}\n链接: ${r.link}\n内容: ${r.snippet}`)
+          .join('\n\n');
+        searchContext = `\n\n---\n【网络实时检索结果（当前日期：${dateStr}）】：\n${snippets}\n\n【回答要求】：请结合上述最新的网络实时检索信息，准确、清晰且有条理地回答用户的问题。在适当时可以自然标注信息来源。`;
+      }
+    } catch (e) {
+      console.warn('Web search failed:', e);
+    } finally {
+      tail.isSearching = false;
+    }
+  }
+
+  await streamInto(tail, searchContext);
 };
 
 const onKeydown = (e: KeyboardEvent) => {
@@ -215,6 +303,9 @@ const openSettings = () => {
   // Make the drafts reflect the current saved config.
   draftEndpoint.value = endpoint.value;
   draftApiKey.value = apiKey.value;
+  draftWebSearch.value = webSearch.value;
+  draftSearchEngine.value = searchEngine.value;
+  draftTavilyKey.value = tavilyApiKey.value;
   draftModels.value = models.value.map((m) => ({ id: ++draftSeq, name: m }));
   modelPickerOpen.value = false;
   view.value = 'settings';
@@ -235,9 +326,12 @@ const removeModelRow = (id: number) => {
   if (draftModels.value.length === 0) addModelRow();
 };
 
-// Commit the whole single connection: request address + key + model rows.
+// Commit the whole single connection: request address + key + model rows + web search.
 const handleSaveConfig = () => {
   setConnection(draftEndpoint.value, draftApiKey.value);
+  setWebSearch(draftWebSearch.value);
+  setSearchEngine(draftSearchEngine.value);
+  setTavilyApiKey(draftTavilyKey.value);
   const names = draftModels.value
     .map((r) => r.name)
     .map((n) => n.trim())
@@ -300,9 +394,47 @@ const currentTypingMsg = computed(() =>
             </div>
             <div class="bubble" :class="msg.role">
               <template v-if="msg.role === 'assistant'">
+                <!-- Searching state -->
+                <div v-if="msg.isSearching" class="search-indicator">
+                  <span class="search-spinner"></span>
+                  <span class="search-text">正在网络检索实时信息…</span>
+                </div>
+
                 <div class="md-content" v-html="renderMarkdown(msg.content)"></div>
+
+                <!-- Web sources citations -->
+                <div v-if="msg.sources && msg.sources.length > 0" class="sources-wrap">
+                  <button
+                    type="button"
+                    class="sources-toggle-btn"
+                    :class="{ open: openSourceMsgIds.includes(msg.id) }"
+                    @click="toggleSources(msg.id)"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                    <span>参考来源 ({{ msg.sources.length }})</span>
+                    <svg class="sources-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                  <div v-if="openSourceMsgIds.includes(msg.id)" class="sources-panel">
+                    <a
+                      v-for="(src, idx) in msg.sources"
+                      :key="idx"
+                      class="source-card"
+                      :href="src.link"
+                      :title="src.link"
+                      @click.prevent="openUrl(src.link)"
+                    >
+                      <div class="source-card-header">
+                        <span class="source-card-num">{{ idx + 1 }}</span>
+                        <span class="source-card-title">{{ src.title }}</span>
+                        <span class="source-card-tag">{{ src.source }}</span>
+                      </div>
+                      <div v-if="src.snippet" class="source-card-snippet">{{ src.snippet }}</div>
+                    </a>
+                  </div>
+                </div>
+
                 <span
-                  v-if="isWaiting && msg.id === currentTypingMsg && msg.content === ''"
+                  v-if="isWaiting && msg.id === currentTypingMsg && msg.content === '' && !msg.isSearching"
                   class="typing"
                 >
                   <i></i><i></i><i></i>
@@ -337,34 +469,52 @@ const currentTypingMsg = computed(() =>
             @input="autoGrowTextarea"
           ></textarea>
 
-          <!-- Bottom control row: model selector (left) / arrow send (right) -->
+          <!-- Bottom control row: model selector & web search (left) / arrow send (right) -->
           <div class="chat-controls">
-            <div class="model-select-wrap">
-              <button
-                type="button"
-                class="model-chip"
-                :title="activeModelName"
-                @click="modelPickerOpen = !modelPickerOpen"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="17" x2="14" y2="17"></line></svg>
-                <span class="model-chip-label">{{ activeModelName }}</span>
-                <svg class="model-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-              </button>
-
-              <div v-if="modelPickerOpen" class="model-dropdown">
-                <div
-                  v-for="m in models"
-                  :key="m"
-                  class="model-option"
-                  :class="{ active: m === activeModelName }"
-                  :title="m"
-                  @click="pickModel(m)"
+            <div class="control-left-group">
+              <div class="model-select-wrap">
+                <button
+                  type="button"
+                  class="model-chip"
+                  :title="activeModelName"
+                  @click="modelPickerOpen = !modelPickerOpen"
                 >
-                  <div class="model-option-head">
-                    <span class="model-option-name">{{ m }}</span>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="17" x2="14" y2="17"></line></svg>
+                  <span class="model-chip-label">{{ activeModelName }}</span>
+                  <svg class="model-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+
+                <div v-if="modelPickerOpen" class="model-dropdown">
+                  <div
+                    v-for="m in models"
+                    :key="m"
+                    class="model-option"
+                    :class="{ active: m === activeModelName }"
+                    :title="m"
+                    @click="pickModel(m)"
+                  >
+                    <div class="model-option-head">
+                      <span class="model-option-name">{{ m }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
+
+              <!-- Web Search toggle chip -->
+              <button
+                type="button"
+                class="web-search-chip"
+                :class="{ active: webSearch }"
+                :title="webSearch ? '联网检索已开启（点击可关闭）' : '联网检索已关闭（点击开启）'"
+                @click="toggleWebSearch"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="2" y1="12" x2="22" y2="12"></line>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+                <span>联网搜索</span>
+              </button>
             </div>
 
             <!-- Circular arrow send / stop -->
@@ -494,6 +644,57 @@ const currentTypingMsg = computed(() =>
                 >
                   <span class="switch-knob"></span>
                 </button>
+              </div>
+            </div>
+
+            <!-- 实时网络检索（Search）配置 -->
+            <div class="ai-config-section">
+              <div class="toggle-row">
+                <div class="toggle-text">
+                  <span class="toggle-title">实时网络检索（Search）</span>
+                  <span class="toggle-desc">开启后，询问时效性问题（如天气、新闻、最新资讯）时自动调用实时检索并结合结果回答。</span>
+                </div>
+                <button
+                  type="button"
+                  class="switch"
+                  :class="{ on: draftWebSearch }"
+                  :aria-pressed="draftWebSearch"
+                  @click="draftWebSearch = !draftWebSearch"
+                >
+                  <span class="switch-knob"></span>
+                </button>
+              </div>
+
+              <div v-if="draftWebSearch" class="search-options-box">
+                <div class="field-label search-engine-label">搜索引擎源</div>
+                <div class="engine-radios">
+                  <label class="engine-radio-item" :class="{ active: draftSearchEngine === 'builtin' }">
+                    <input type="radio" value="builtin" v-model="draftSearchEngine" />
+                    <div class="engine-radio-text">
+                      <span class="engine-name">内置免费检索（推荐）</span>
+                      <span class="engine-sub">包含 Bing 搜索与实时气象中心，无需配置任何 API Key</span>
+                    </div>
+                  </label>
+                  <label class="engine-radio-item" :class="{ active: draftSearchEngine === 'tavily' }">
+                    <input type="radio" value="tavily" v-model="draftSearchEngine" />
+                    <div class="engine-radio-text">
+                      <span class="engine-name">Tavily Search API</span>
+                      <span class="engine-sub">专为 AI 优化的高质量专业搜索服务（需填 Key）</span>
+                    </div>
+                  </label>
+                </div>
+
+                <div v-if="draftSearchEngine === 'tavily'" class="tavily-key-field">
+                  <label class="field-label" for="tavily-key">Tavily API Key</label>
+                  <input
+                    id="tavily-key"
+                    class="field-input mono"
+                    type="password"
+                    v-model="draftTavilyKey"
+                    placeholder="tvly-…"
+                  />
+                  <div class="field-hint">未填写或额度耗尽时将自动回退到内置免费检索。</div>
+                </div>
               </div>
             </div>
 
@@ -902,4 +1103,215 @@ const currentTypingMsg = computed(() =>
 }
 .btn-add-model:hover { background: var(--primary-light); }
 
+/* Left group in chat-controls (model selector + web search toggle) */
+.control-left-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Web Search toggle chip */
+.web-search-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  color: var(--text-muted);
+  padding: 5px 9px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all .18s ease;
+  user-select: none;
+}
+.web-search-chip:hover {
+  color: var(--primary-color);
+  border-color: color-mix(in srgb, var(--primary-color) 40%, transparent);
+  background: color-mix(in srgb, var(--primary-color) 6%, transparent);
+}
+.web-search-chip.active {
+  color: var(--primary-color);
+  background: var(--primary-light);
+  border-color: color-mix(in srgb, var(--primary-color) 35%, transparent);
+  font-weight: 500;
+}
+
+/* Search status banner inside assistant message bubble */
+.search-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 8px;
+  color: var(--primary-color);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.search-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Citations accordion inside bubble */
+.sources-wrap {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-color);
+}
+.sources-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--text-muted) 8%, transparent);
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all .16s ease;
+}
+.sources-toggle-btn:hover {
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+  border-color: color-mix(in srgb, var(--primary-color) 25%, transparent);
+}
+.sources-chevron {
+  transition: transform .18s ease;
+}
+.sources-toggle-btn.open .sources-chevron {
+  transform: rotate(180deg);
+}
+
+.sources-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.source-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 10px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  transition: all .15s ease;
+}
+.source-card:hover {
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 4%, var(--bg-main));
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+}
+.source-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.source-card-num {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--primary-color);
+  background: var(--primary-light);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.source-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.source-card-tag {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.source-card-snippet {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Settings: search options box */
+.search-options-box {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--bg-sidebar) 50%, transparent);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.search-engine-label {
+  margin-bottom: 2px;
+}
+.engine-radios {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.engine-radio-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all .16s ease;
+}
+.engine-radio-item input {
+  margin-top: 3px;
+  accent-color: var(--primary-color);
+  cursor: pointer;
+}
+.engine-radio-item:hover {
+  border-color: var(--primary-color);
+}
+.engine-radio-item.active {
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 5%, var(--bg-main));
+}
+.engine-radio-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.engine-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.engine-sub {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.tavily-key-field {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-color);
+}
 </style>

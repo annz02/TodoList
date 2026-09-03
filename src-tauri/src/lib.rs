@@ -4,6 +4,9 @@ use tauri::Manager;
 mod update;
 use update::UpdateState;
 
+mod search;
+
+
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
@@ -181,6 +184,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
         save_todos, load_todos, save_settings, load_settings,
         get_git_commits, select_folder, open_url,
+        search::web_search,
         update::get_update_state,
         update::check_for_updates,
         update::install_update,
