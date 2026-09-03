@@ -9,6 +9,10 @@ import { useWebSearch, type SearchResult } from '../composables/useWebSearch';
 import { renderMarkdown, cleanDSMLTags } from '../utils/markdown';
 
 const props = defineProps<{ todos: Todo[] }>();
+const emit = defineEmits<{
+  (e: 'create-task', task: { title: string; category?: string; dueDate?: string; priority?: number }): void;
+  (e: 'complete-task', taskTitleOrId: string): void;
+}>();
 
 const {
   endpoint,
@@ -37,7 +41,63 @@ export interface AgentStep {
   status: 'running' | 'done' | 'error';
 }
 
-const AGENT_TOOLS: ToolDefinition[] = [
+const LOCAL_TOOLS: ToolDefinition[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'create_task',
+      description: '在用户的 Todolist 中新建一条待办任务。当用户要求创建任务、记录待办或安排日程时调用此工具。',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: '待办任务的标题，例如“开发todolist”',
+          },
+          category: {
+            type: 'string',
+            description: '任务分类，如“工作”、“开发”、“学习”、“生活”等，可根据任务内容推断',
+          },
+          dueDate: {
+            type: 'string',
+            description: '任务截止时间，格式为 YYYY-MM-DDTHH:mm（如“2026-09-03T18:00”，可结合当前日期推算）',
+          },
+        },
+        required: ['title'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'complete_task',
+      description: '将用户 Todolist 中的某项待办任务标记为已完成。当用户说“我做完了xx”、“把xx标记为完成”时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskTitleOrId: {
+            type: 'string',
+            description: '要标记完成的任务标题或任务关键词',
+          },
+        },
+        required: ['taskTitleOrId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_today_tasks',
+      description: '查询用户在当前 Todolist 中的今日任务列表、各分类进度与完成统计。',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+];
+
+const WEB_TOOLS: ToolDefinition[] = [
   {
     type: 'function',
     function: {
@@ -72,18 +132,11 @@ const AGENT_TOOLS: ToolDefinition[] = [
       },
     },
   },
-  {
-    type: 'function',
-    function: {
-      name: 'get_today_tasks',
-      description: '查询用户在当前 Todolist 中的今日任务列表、各分类进度与完成统计。',
-      parameters: {
-        type: 'object',
-        properties: {},
-      },
-    },
-  },
 ];
+
+const getActiveTools = () => {
+  return webSearch.value ? [...LOCAL_TOOLS, ...WEB_TOOLS] : [...LOCAL_TOOLS];
+};
 
 function parseDSMLToolCalls(text: string) {
   const calls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = [];
@@ -212,7 +265,7 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
   const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 星期${['日', '一', '二', '三', '四', '五', '六'][now.getDay()]}`;
 
   const system = apiKey.value.trim()
-    ? `你是 Todolist 内置的智能助手（基于 Antigravity Agent 智能体架构）。当前时间：${dateStr}。\n你具备网络搜索 (web_search)、网页深读 (fetch_webpage) 及待办任务查询 (get_today_tasks) 工具。遇到需要实时事实、突发资讯、天气、外部知识或用户今日待办的问题，请主动自主调用工具获取真实数据后再回答。回答请准确、专业、清晰并使用中文。`
+    ? `你是 Todolist 内置的智能助手（基于 Antigravity Agent 智能体架构）。当前时间：${dateStr}。\n你具备待办任务创建 (create_task)、标记完成 (complete_task)、待办查询 (get_today_tasks)、网络搜索 (web_search) 及网页深读 (fetch_webpage) 工具。\n【任务操作指南】：\n- 当用户要求创建、添加、记录新待办时，请主动调用 create_task 工具；\n- 当用户要求标记任务完成时，请调用 complete_task 工具；\n- 遇到需要最新事实、突发资讯、外部知识时，请调用 web_search 工具。\n回答请准确、友好并使用中文。`
     : '你是 Todolist 内置的 AI 助手。当前未配置大模型 API，仅能根据内置规则生成工作日报。请友好提醒用户在下方模型选择器中选择并配置模型。';
 
   const conversation: ChatMessage[] = [
@@ -229,7 +282,7 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
 
     while (toolTurn < MAX_TOOL_TURNS) {
       toolTurn++;
-      const tools = webSearch.value ? AGENT_TOOLS : undefined;
+      const tools = getActiveTools();
 
       const result = await sendChat({
         endpoint: cfg.endpoint,
@@ -285,7 +338,81 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
 
         if (!tail.steps) tail.steps = [];
 
-        if (toolName === 'web_search') {
+        if (toolName === 'create_task') {
+          const title = (args.title || '').trim();
+          const category = (args.category || '工作').trim();
+          const dueDate = (args.dueDate || '').trim();
+          const step: AgentStep = {
+            name: 'create_task',
+            title: `创建待办任务：「${title || '新任务'}」`,
+            status: 'running',
+          };
+          tail.steps.push(step);
+          await scrollToBottom();
+
+          if (title) {
+            emit('create-task', { title, category, dueDate: dueDate || undefined });
+            step.status = 'done';
+            step.title = `已创建待办任务：「${title}」${category ? ` · ${category}` : ''}`;
+            await scrollToBottom();
+
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: true,
+                message: `待办任务「${title}」已成功创建并保存到 Todolist 中！分类：${category}。`,
+              }),
+            });
+          } else {
+            step.status = 'error';
+            step.title = '创建任务失败：缺少标题';
+            await scrollToBottom();
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({ success: false, error: '缺少任务标题' }),
+            });
+          }
+        } else if (toolName === 'complete_task') {
+          const taskTitleOrId = (args.taskTitleOrId || '').trim();
+          const step: AgentStep = {
+            name: 'complete_task',
+            title: `标记任务完成：「${taskTitleOrId}」`,
+            status: 'running',
+          };
+          tail.steps.push(step);
+          await scrollToBottom();
+
+          if (taskTitleOrId) {
+            emit('complete-task', taskTitleOrId);
+            step.status = 'done';
+            step.title = `已将任务标记为完成：「${taskTitleOrId}」`;
+            await scrollToBottom();
+
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: true,
+                message: `任务「${taskTitleOrId}」已成功标记为完成！`,
+              }),
+            });
+          } else {
+            step.status = 'error';
+            step.title = '标记任务失败：未指定任务';
+            await scrollToBottom();
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({ success: false, error: '缺少任务标识' }),
+            });
+          }
+        } else if (toolName === 'web_search') {
           const query = (args.query || '').trim();
           const step: AgentStep = {
             name: 'web_search',

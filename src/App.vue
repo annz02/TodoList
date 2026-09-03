@@ -466,6 +466,36 @@ const handleInlineSave = (data: { title: string; category?: string; startTime: s
   showInlineCreate.value = false;
 };
 
+const handleCreateTaskFromAI = (data: { title: string; category?: string; dueDate?: string; startTime?: string; priority?: number }) => {
+  const newTask: Todo = {
+    id: Date.now().toString(),
+    title: data.title,
+    category: data.category || '工作',
+    completed: false,
+    startTime: data.startTime || undefined,
+    dueDate: data.dueDate || undefined,
+    timeText: formatTimeText(data.dueDate, data.startTime),
+    priority: data.priority || undefined,
+  };
+  todos.value.push(newTask);
+  saveTodos();
+  return newTask;
+};
+
+const handleCompleteTaskFromAI = (titleOrId: string) => {
+  const query = titleOrId.trim().toLowerCase();
+  const t = todos.value.find(
+    (x) => x.id === query || x.title.toLowerCase().includes(query),
+  );
+  if (t) {
+    t.completed = true;
+    t.completedAt = new Date().toISOString();
+    saveTodos();
+    return t;
+  }
+  return null;
+};
+
 const minimizeWindow = () => getCurrentWindow().minimize();
 const toggleMaximize = () => getCurrentWindow().toggleMaximize();
 const closeWindow = () => getCurrentWindow().close();
@@ -533,7 +563,11 @@ const closeWindow = () => getCurrentWindow().close();
     />
 
     <div v-else-if="activeCategory === 'ai-chat'" class="ai-chat-page">
-      <AIChatView :todos="todos" />
+      <AIChatView
+        :todos="todos"
+        @create-task="handleCreateTaskFromAI"
+        @complete-task="handleCompleteTaskFromAI"
+      />
     </div>
 
     <div v-else class="task-list">
