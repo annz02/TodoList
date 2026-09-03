@@ -57,14 +57,14 @@ export function cleanDSMLTags(text: string): string {
   let out = text;
 
   // 1) Whole envelope if the model wrapped its tool block.
-  out = out.replace(/<\/?[|｜]?DSMLtool_calls[|｜]?>?[\s\S]*?<\/?[|｜]?DSMLtool_calls[|｜]?>/gi, ' ');
+  out = out.replace(/<\/?[|｜]?DSMLtool_calls[|｜]?>?[\s\S]*?<\/?[|｜]?DSMLtool_calls[|｜]?>/gi, '');
 
   // 2) Complete paired invoke/parameter blocks.
   const paired = /<[|｜]\s*DSML\s*[|｜]\s*invoke\b[\s\S]*?<\/[|｜]\s*DSML\s*[|｜]\s*invoke\s*>/gi;
   let prev: string;
   do {
     prev = out;
-    out = out.replace(paired, ' ');
+    out = out.replace(paired, '');
   } while (out !== prev);
 
   // 3) Any leftover lone <DSML ...> opener: drop only the broken stub up to the
@@ -74,7 +74,36 @@ export function cleanDSMLTags(text: string): string {
   // 4) Clean up leftover stray end-tags.
   out = out.replace(/<\/[|｜]\s*DSML[^>]*>/gi, '');
 
-  return out.replace(/[ \t]{2,}/g, ' ').trim();
+  // NOTE: Do NOT call .trim() here, because doing so during streaming deletes
+  // trailing newlines before the next chunk arrives.
+  return out;
+}
+
+/**
+ * Intelligently normalizes text that may have been squashed by the model or
+ * missing explicit line breaks, ensuring section titles, numbered list items,
+ * and bullet points are properly formatted with newlines.
+ */
+export function normalizeMarkdownText(raw: string): string {
+  if (!raw) return '';
+  let s = raw;
+
+  // 1. Separate Chinese section headers (e.g. "整理：一、" -> "整理：\n\n一、")
+  s = s.replace(/([。！？；：\n]|\s|^)([一二三四五六七八九十]+、)/g, '$1\n\n$2');
+
+  // 2. Separate numbered list items glued to preceding characters (e.g. "待办应用1. Planify", "2026年9月2. WeekToDo")
+  s = s.replace(/([^\d\n\s])(\d+[.、]\s+)/g, '$1\n\n$2');
+
+  // 3. Separate bullet items glued after sentence endings (e.g. "不够完整。-除了" -> "不够完整。\n\n- 除了")
+  s = s.replace(/([。！？；])\s*([-\*•])\s*/g, '$1\n\n$2 ');
+
+  // 4. Separate summary/conclusion blocks (e.g. "不准确。小结：" -> "不准确。\n\n小结：")
+  s = s.replace(/([。！？；\n]|\s|^)(小结[：:]|总结[：:]|提示[：:])/g, '$1\n\n$2');
+
+  // 5. Collapse excessive blank lines to max 2
+  s = s.replace(/\n{3,}/g, '\n\n');
+
+  return s;
 }
 
 /**
@@ -85,8 +114,11 @@ export function cleanDSMLTags(text: string): string {
  */
 export function renderMarkdown(rawMd: string): string {
   if (!rawMd) return '';
-  const md = cleanDSMLTags(rawMd);
-  if (!md) return '';
+  const cleaned = cleanDSMLTags(rawMd);
+  if (!cleaned.trim()) return '';
+
+  // Apply layout normalization so squashed lists or glued headers are gracefully expanded
+  const md = normalizeMarkdownText(cleaned);
   const lines = md.split('\n');
   let html = '';
 
@@ -136,13 +168,20 @@ export function renderMarkdown(rawMd: string): string {
       continue;
     }
 
-    // Report section title (formatted as `**一、 …**` / `**📝 …**`) -> bordered block
-    if (/^\*\*(📝|[一二三四五六七八九十]+、)/.test(trimmed)) {
+    // Report section title (formatted as `**一、 …**` or `一、…` or `**📝 …**`) -> bordered block
+    if (/^(?:\*\*)?(?:📝|[一二三四五六七八九十]+、)/.test(trimmed)) {
       closeReport();
       const title = trimmed.replace(/\*\*/g, '');
       html += `<div class="chat-report-title">${inline(title)}</div>`;
       html += '<div class="chat-report-content">';
       inReport = true;
+      continue;
+    }
+
+    // Summary / note callout box (e.g. `小结：…` or `**小结：**…` or `总结：…`)
+    if (/^(?:\*\*)?(?:小结|总结|提示)[：:]/.test(trimmed)) {
+      closeReport();
+      html += `<div class="chat-summary-box">${inline(trimmed)}</div>`;
       continue;
     }
 
@@ -163,16 +202,16 @@ export function renderMarkdown(rawMd: string): string {
         html += `<div class="chat-subline">${inline(item)}</div>`;
       } else {
         closeReport();
-        html += `<p class="chat-p">${inline('• ' + item)}</p>`;
+        html += `<p class="chat-p chat-bullet"><span class="bullet-dot">•</span> ${inline(item)}</p>`;
       }
       continue;
     }
 
     // Ordered list top-level (e.g. "1. text")
-    const oLine = trimmed.match(/^\d+[.、]\s+(.*)$/);
+    const oLine = trimmed.match(/^(\d+)[.、]\s+(.*)$/);
     if (oLine && !/^\d{4}[.、]/.test(trimmed)) {
       closeReport();
-      html += `<p class="chat-p">${inline(trimmed.replace(/^(\d+)[.、]\s+/, '<b>$1.</b> '))}</p>`;
+      html += `<p class="chat-p chat-num-item"><b class="num-badge">${oLine[1]}.</b> ${inline(oLine[2])}</p>`;
       continue;
     }
 

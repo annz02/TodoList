@@ -390,7 +390,6 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
         signal: ctrl.signal,
         onChunk: (chunk) => {
           tail.content += chunk;
-          tail.content = cleanDSMLTags(tail.content);
           scrollToBottom();
         },
       });
@@ -715,7 +714,7 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
     // 2. 最终总结阶段：携带所有已收集的工具结果，强制模型直接给出最终回答，不再调用工具
     conversation.push({
       role: 'user',
-      content: '请依据上文已经执行完成的工具调用结果，直接为当前问题给出清晰完整的最终回答。不要再执行任何工具、不要再输出 DSML 标签，直接输出供用户阅读的正文即可。',
+      content: '请依据上文已经执行完成的工具调用结果，直接为当前问题给出清晰完整的最终回答。注意排版要求：务必使用规范优雅的 Markdown 格式，分段空行，使用加粗小节标题（如 **一、...**）、有序列表（1. 2.）或项目符号（- ），并在段落与列表之间空行分隔，严禁输出未经分段的密集文字墙。直接输出正文即可。',
     });
 
     const finalResult = await sendChat({
@@ -728,7 +727,6 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
       signal: ctrl.signal,
       onChunk: (chunk) => {
         tail.content += chunk;
-        tail.content = cleanDSMLTags(tail.content);
         scrollToBottom();
       },
     });
@@ -1649,26 +1647,111 @@ const currentTypingMsg = computed(() =>
 @keyframes blink { 0%,80%,100% { opacity: .25; } 40% { opacity: 1; } }
 
 /* markdown body */
-.md-content :deep(.chat-p) { margin: 0 0 8px 0; white-space: pre-wrap; }
-.md-content :deep(.chat-p:last-child) { margin-bottom: 0; }
-.md-content :deep(.chat-report-title) { font-weight: 600; color: var(--primary-color); margin: 4px 0 8px; }
-.md-content :deep(.chat-report-content) { padding-left: 12px; border-left: 2px solid color-mix(in srgb, var(--primary-color) 28%, transparent); white-space: pre-wrap; }
-.md-content :deep(.chat-subline) { color: var(--text-secondary); padding-left: 8px; white-space: pre-wrap; }
-.md-content :deep(.chat-h1), :deep(.chat-h2), :deep(.chat-h3), :deep(.chat-h4) { margin: 10px 0 6px; }
-.md-content :deep(.chat-divider) { border: none; border-top: 1px dashed var(--border-color); margin: 12px 0; }
+.md-content {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--text-main);
+  word-break: break-word;
+}
+.md-content :deep(.chat-p) {
+  margin: 0 0 10px 0;
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
+.md-content :deep(.chat-p:last-child) {
+  margin-bottom: 0;
+}
+.md-content :deep(.chat-bullet) {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 4px 0 6px 4px;
+}
+.md-content :deep(.bullet-dot) {
+  color: var(--primary-color);
+  font-weight: bold;
+}
+.md-content :deep(.chat-num-item) {
+  margin: 6px 0 8px;
+  padding: 2px 0;
+}
+.md-content :deep(.num-badge) {
+  color: var(--primary-color);
+  margin-right: 4px;
+  font-size: 14px;
+}
+.md-content :deep(.chat-report-title) {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--primary-color);
+  margin: 14px 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.md-content :deep(.chat-report-content) {
+  padding: 4px 0 6px 14px;
+  border-left: 2px solid color-mix(in srgb, var(--primary-color) 35%, transparent);
+  margin-bottom: 12px;
+}
+.md-content :deep(.chat-summary-box) {
+  margin: 14px 0 8px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--primary-color) 8%, var(--bg-sidebar));
+  border-left: 3px solid var(--primary-color);
+  border-radius: 6px;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text-main);
+}
+.md-content :deep(.chat-subline) {
+  color: var(--text-secondary);
+  padding-left: 12px;
+  margin: 3px 0;
+  white-space: pre-wrap;
+  font-size: 13px;
+}
+.md-content :deep(.chat-h1),
+.md-content :deep(.chat-h2),
+.md-content :deep(.chat-h3),
+.md-content :deep(.chat-h4) {
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 14px 0 8px;
+}
+.md-content :deep(.chat-divider) {
+  border: none;
+  border-top: 1px dashed var(--border-color);
+  margin: 14px 0;
+}
 .md-content :deep(.chat-inline-code) {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   background: color-mix(in srgb, var(--text-muted) 15%, transparent);
-  padding: 1px 5px; border-radius: 4px; font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 12px;
 }
 .md-content :deep(.chat-code) {
   background: color-mix(in srgb, var(--text-main) 6%, var(--bg-main));
-  border: 1px solid var(--border-color); border-radius: 8px;
-  padding: 10px 12px; overflow: auto; margin: 8px 0;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow: auto;
+  margin: 10px 0;
 }
-.md-content :deep(.chat-code code) { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
-.md-content :deep(a) { color: var(--primary-color); }
-.md-content :deep(strong) { font-weight: 600; }
+.md-content :deep(.chat-code code) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+}
+.md-content :deep(a) {
+  color: var(--primary-color);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md-content :deep(strong) {
+  font-weight: 600;
+  color: var(--text-main);
+}
 
 /* Input footer: vertical dialogue box (input on top, model/send row below) */
 .chat-footer {
