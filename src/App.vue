@@ -496,6 +496,42 @@ const handleCompleteTaskFromAI = (titleOrId: string) => {
   return null;
 };
 
+const handleDeleteTaskFromAI = (titleOrId: string): Todo | null => {
+  const query = titleOrId.trim().toLowerCase();
+  const index = todos.value.findIndex(
+    (x) => x.id === query || x.title.toLowerCase().includes(query),
+  );
+  if (index !== -1) {
+    const deleted = todos.value.splice(index, 1)[0];
+    saveTodos();
+    return deleted;
+  }
+  return null;
+};
+
+const handleUpdateTaskFromAI = (data: {
+  taskTitleOrId: string;
+  newTitle?: string;
+  newCategory?: string;
+  newDueDate?: string;
+}): Todo | null => {
+  const query = data.taskTitleOrId.trim().toLowerCase();
+  const task = todos.value.find(
+    (x) => x.id === query || x.title.toLowerCase().includes(query),
+  );
+  if (task) {
+    if (data.newTitle) task.title = data.newTitle;
+    if (data.newCategory) task.category = data.newCategory;
+    if (data.newDueDate) {
+      task.dueDate = data.newDueDate;
+      task.timeText = formatTimeText(task.dueDate, task.startTime);
+    }
+    saveTodos();
+    return task;
+  }
+  return null;
+};
+
 const minimizeWindow = () => getCurrentWindow().minimize();
 const toggleMaximize = () => getCurrentWindow().toggleMaximize();
 const closeWindow = () => getCurrentWindow().close();
@@ -567,6 +603,8 @@ const closeWindow = () => getCurrentWindow().close();
         :todos="todos"
         @create-task="handleCreateTaskFromAI"
         @complete-task="handleCompleteTaskFromAI"
+        @delete-task="handleDeleteTaskFromAI"
+        @update-task="handleUpdateTaskFromAI"
       />
     </div>
 

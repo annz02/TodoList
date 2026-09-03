@@ -12,6 +12,8 @@ const props = defineProps<{ todos: Todo[] }>();
 const emit = defineEmits<{
   (e: 'create-task', task: { title: string; category?: string; dueDate?: string; priority?: number }): void;
   (e: 'complete-task', taskTitleOrId: string): void;
+  (e: 'delete-task', taskTitleOrId: string): void;
+  (e: 'update-task', data: { taskTitleOrId: string; newTitle?: string; newCategory?: string; newDueDate?: string }): void;
 }>();
 
 const {
@@ -70,6 +72,35 @@ const LOCAL_TOOLS: ToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'update_task',
+      description: '修改用户 Todolist 中某项已有任务的标题、分类或截止时间。当用户要求“把xx改名为yy”、“把xx的截止时间改成5点”、“修改xx任务”时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskTitleOrId: {
+            type: 'string',
+            description: '要修改的目标任务的原标题或关键词',
+          },
+          newTitle: {
+            type: 'string',
+            description: '修改后的新标题（选填）',
+          },
+          newCategory: {
+            type: 'string',
+            description: '修改后的新分类（选填）',
+          },
+          newDueDate: {
+            type: 'string',
+            description: '修改后的截止时间，格式为 YYYY-MM-DDTHH:mm（选填）',
+          },
+        },
+        required: ['taskTitleOrId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'complete_task',
       description: '将用户 Todolist 中的某项待办任务标记为已完成。当用户说“我做完了xx”、“把xx标记为完成”时调用。',
       parameters: {
@@ -78,6 +109,23 @@ const LOCAL_TOOLS: ToolDefinition[] = [
           taskTitleOrId: {
             type: 'string',
             description: '要标记完成的任务标题或任务关键词',
+          },
+        },
+        required: ['taskTitleOrId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_task',
+      description: '从用户的 Todolist 中删除某项待办任务。当用户要求“删除xx任务”、“把xx删掉”时调用此工具。',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskTitleOrId: {
+            type: 'string',
+            description: '要删除的任务标题或关键词',
           },
         },
         required: ['taskTitleOrId'],
@@ -265,7 +313,7 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
   const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 星期${['日', '一', '二', '三', '四', '五', '六'][now.getDay()]}`;
 
   const system = apiKey.value.trim()
-    ? `你是 Todolist 内置的智能助手（基于 Antigravity Agent 智能体架构）。当前时间：${dateStr}。\n你具备待办任务创建 (create_task)、标记完成 (complete_task)、待办查询 (get_today_tasks)、网络搜索 (web_search) 及网页深读 (fetch_webpage) 工具。\n【任务操作指南】：\n- 当用户要求创建、添加、记录新待办时，请主动调用 create_task 工具；\n- 当用户要求标记任务完成时，请调用 complete_task 工具；\n- 遇到需要最新事实、突发资讯、外部知识时，请调用 web_search 工具。\n回答请准确、友好并使用中文。`
+    ? `你是 Todolist 内置的智能助手（基于 Antigravity Agent 智能体架构）。当前时间：${dateStr}。\n你具备全套待办管理与网络工具：\n- create_task: 新建待办；\n- update_task: 修改已有待办的标题、分类、截止时间；\n- delete_task: 删除某项待办；\n- complete_task: 标记待办完成；\n- get_today_tasks: 查询今日任务进度；\n- web_search / fetch_webpage: 网络检索与网页精读。\n【操作准则】：当用户提出新建、修改、删除或完成待办的诉求时，请直接调用对应工具执行。回答请准确、专业、友好并使用中文。`
     : '你是 Todolist 内置的 AI 助手。当前未配置大模型 API，仅能根据内置规则生成工作日报。请友好提醒用户在下方模型选择器中选择并配置模型。';
 
   const conversation: ChatMessage[] = [
@@ -376,6 +424,51 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
               content: JSON.stringify({ success: false, error: '缺少任务标题' }),
             });
           }
+        } else if (toolName === 'update_task') {
+          const taskTitleOrId = (args.taskTitleOrId || '').trim();
+          const newTitle = (args.newTitle || '').trim();
+          const newCategory = (args.newCategory || '').trim();
+          const newDueDate = (args.newDueDate || '').trim();
+
+          const step: AgentStep = {
+            name: 'update_task',
+            title: `修改待办任务：「${taskTitleOrId}」`,
+            status: 'running',
+          };
+          tail.steps.push(step);
+          await scrollToBottom();
+
+          if (taskTitleOrId) {
+            emit('update-task', {
+              taskTitleOrId,
+              newTitle: newTitle || undefined,
+              newCategory: newCategory || undefined,
+              newDueDate: newDueDate || undefined,
+            });
+            step.status = 'done';
+            step.title = `已修改待办任务：「${newTitle || taskTitleOrId}」`;
+            await scrollToBottom();
+
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: true,
+                message: `待办任务「${taskTitleOrId}」已成功修改更新！${newTitle ? `新标题：${newTitle}` : ''}`,
+              }),
+            });
+          } else {
+            step.status = 'error';
+            step.title = '修改任务失败：未指定任务';
+            await scrollToBottom();
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({ success: false, error: '缺少任务标识' }),
+            });
+          }
         } else if (toolName === 'complete_task') {
           const taskTitleOrId = (args.taskTitleOrId || '').trim();
           const step: AgentStep = {
@@ -404,6 +497,42 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
           } else {
             step.status = 'error';
             step.title = '标记任务失败：未指定任务';
+            await scrollToBottom();
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({ success: false, error: '缺少任务标识' }),
+            });
+          }
+        } else if (toolName === 'delete_task') {
+          const taskTitleOrId = (args.taskTitleOrId || '').trim();
+          const step: AgentStep = {
+            name: 'delete_task',
+            title: `删除待办任务：「${taskTitleOrId}」`,
+            status: 'running',
+          };
+          tail.steps.push(step);
+          await scrollToBottom();
+
+          if (taskTitleOrId) {
+            emit('delete-task', taskTitleOrId);
+            step.status = 'done';
+            step.title = `已删除待办任务：「${taskTitleOrId}」`;
+            await scrollToBottom();
+
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: true,
+                message: `待办任务「${taskTitleOrId}」已成功从 Todolist 中删除！`,
+              }),
+            });
+          } else {
+            step.status = 'error';
+            step.title = '删除任务失败：未指定任务';
             await scrollToBottom();
             conversation.push({
               role: 'tool',
