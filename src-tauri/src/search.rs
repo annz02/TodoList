@@ -62,84 +62,7 @@ fn extract_href(html: &str) -> Option<String> {
     }
 }
 
-// Check for common Chinese city names
-const CITIES: &[&str] = &[
-    "北京", "上海", "广州", "深圳", "济南", "青岛", "杭州", "南京", "成都", "武汉",
-    "重庆", "西安", "天津", "苏州", "长沙", "郑州", "沈阳", "大连", "厦门", "福州",
-    "宁波", "昆明", "哈尔滨", "长春", "合肥", "南昌", "贵阳", "太原", "石家庄", "南宁",
-    "海口", "乌鲁木齐", "兰州", "呼和浩特", "银川", "西宁", "拉萨", "东莞", "佛山", "无锡",
-    "烟台", "潍坊", "临沂", "淄博", "威海", "泰安", "德州", "聊城", "日照", "滨州",
-    "菏泽", "枣庄", "温州", "常州", "绍兴", "泉州", "南通", "嘉兴", "金华", "珠海",
-    "中山", "保定", "邯郸", "洛阳", "唐山", "徐州", "三亚", "香港", "澳门", "台北"
-];
 
-fn detect_city(query: &str) -> Option<&'static str> {
-    for city in CITIES {
-        if query.contains(city) {
-            return Some(city);
-        }
-    }
-    None
-}
-
-async fn fetch_weather(client: &reqwest::Client, city: &str) -> Option<SearchResult> {
-    let url = format!("https://wttr.in/{}?format=j1&lang=zh", city);
-    let resp = client
-        .get(&url)
-        .header("User-Agent", "Mozilla/5.0")
-        .timeout(Duration::from_secs(4))
-        .send()
-        .await
-        .ok()?;
-
-    if !resp.status().is_success() {
-        return None;
-    }
-
-    let json: serde_json::Value = resp.json().await.ok()?;
-    let cur = json.get("current_condition")?.get(0)?;
-    let temp_c = cur.get("temp_C")?.as_str()?;
-    let humidity = cur.get("humidity")?.as_str().unwrap_or("--");
-    let wind_speed = cur.get("windspeedKmph")?.as_str().unwrap_or("--");
-    let wind_dir = cur.get("winddir16Point")?.as_str().unwrap_or("");
-    
-    // Description
-    let desc = cur
-        .get("lang_zh")
-        .and_then(|v| v.get(0))
-        .and_then(|v| v.get("value"))
-        .and_then(|v| v.as_str())
-        .or_else(|| {
-            cur.get("weatherDesc")
-                .and_then(|v| v.get(0))
-                .and_then(|v| v.get("value"))
-                .and_then(|v| v.as_str())
-        })
-        .unwrap_or("晴");
-
-    // Weather forecast for today
-    let today_w = json.get("weather").and_then(|v| v.get(0));
-    let max_temp = today_w.and_then(|w| w.get("maxtempC")).and_then(|v| v.as_str()).unwrap_or(temp_c);
-    let min_temp = today_w.and_then(|w| w.get("mintempC")).and_then(|v| v.as_str()).unwrap_or(temp_c);
-    let astronomy = today_w.and_then(|w| w.get("astronomy")).and_then(|v| v.get(0));
-    let sunrise = astronomy.and_then(|a| a.get("sunrise")).and_then(|v| v.as_str()).unwrap_or("");
-    let sunset = astronomy.and_then(|a| a.get("sunset")).and_then(|v| v.as_str()).unwrap_or("");
-
-    let mut snippet = format!(
-        "【{}实时天气】：当前气温 {}℃，天气状况：{}，今日气温范围 {}℃ ~ {}℃，相对湿度 {}%，风速 {} km/h（{}）。",
-        city, temp_c, desc, min_temp, max_temp, humidity, wind_speed, wind_dir
-    );
-    if !sunrise.is_empty() && !sunset.is_empty() {
-        snippet.push_str(&format!(" 今日日出 {}，日落 {}。", sunrise, sunset));
-    }
-
-    Some(SearchResult {
-        title: format!("{}实时天气与今日预报", city),
-        snippet,
-        link: format!("https://wttr.in/{}", city),
-        source: "实时气象".to_string(),
-    })
-}
 
 fn clean_search_query(raw: &str) -> String {
     let mut q = raw.trim().to_string();
@@ -322,39 +245,8 @@ pub async fn web_search(query: String, options: Option<SearchOptions>) -> Result
         }
     }
 
-    // 2. Built-in search: check weather query first
-    let is_weather_query = trimmed.contains("天气")
-        || trimmed.contains("气温")
-        || trimmed.contains("温度")
-        || trimmed.contains("下雨")
-        || trimmed.contains("预报");
-
-    let mut results = Vec::new();
-
-    if is_weather_query {
-        if let Some(city) = detect_city(trimmed) {
-            if let Some(weather_res) = fetch_weather(&client, city).await {
-                results.push(weather_res);
-            }
-        }
-    }
-
-    // 3. Perform general Bing search
-    match search_bing(&client, trimmed).await {
-        Ok(bing_results) => {
-            for item in bing_results {
-                results.push(item);
-            }
-        }
-        Err(e) => {
-            // If we have weather result, return it even if Bing fails
-            if results.is_empty() {
-                return Err(e);
-            }
-        }
-    }
-
-    Ok(results)
+    // 2. Perform general Bing search
+    search_bing(&client, trimmed).await
 }
 
 #[tauri::command]
