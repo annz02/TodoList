@@ -40,6 +40,16 @@ interface LocalMsg {
 let idSeq = 1;
 const messages = ref<LocalMsg[]>([]);
 const scroller = ref<HTMLElement | null>(null);
+const textareaEl = ref<HTMLTextAreaElement | null>(null);
+
+// Auto-grow the input textarea up to its CSS max-height, then scroll internally.
+const autoGrowTextarea = () => {
+  const el = textareaEl.value;
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+  el.scrollTop = 0;
+};
 
 const helpText = `你好，我是 AI 助手 ✨
 
@@ -121,6 +131,7 @@ const sendMessage = async () => {
   if (abortCtrl.value) return;
 
   input.value = '';
+  autoGrowTextarea();
   messages.value.push({ id: idSeq++, role: 'user', content: text });
   const tail = { id: idSeq++, role: 'assistant' as const, content: '' };
   messages.value.push(tail);
@@ -315,44 +326,67 @@ const currentTypingMsg = computed(() =>
 
       <!-- Input -->
       <div class="chat-footer">
-        <div class="chat-inputbar">
+        <div class="chat-box">
           <textarea
+            ref="textareaEl"
             v-model="input"
             rows="1"
             class="input-area"
             placeholder="输入消息，Enter 发送，Shift+Enter 换行"
             @keydown="onKeydown"
+            @input="autoGrowTextarea"
           ></textarea>
-          <button v-if="isWaiting" class="send-btn stop" @click="stopGenerating">停止</button>
-          <button v-else class="send-btn" :disabled="!input.trim()" @click="sendMessage">发送</button>
-        </div>
 
-        <!-- Model selector strip -->
-        <div class="model-strip">
-          <button
-            type="button"
-            class="model-chip"
-            title="切换模型"
-            @click="modelPickerOpen = !modelPickerOpen"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="17" x2="14" y2="17"></line></svg>
-            <span class="model-chip-label">{{ activeModelName }}</span>
-            <svg class="model-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-          </button>
+          <!-- Bottom control row: model selector (left) / arrow send (right) -->
+          <div class="chat-controls">
+            <div class="model-select-wrap">
+              <button
+                type="button"
+                class="model-chip"
+                :title="activeModelName"
+                @click="modelPickerOpen = !modelPickerOpen"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="17" x2="14" y2="17"></line></svg>
+                <span class="model-chip-label">{{ activeModelName }}</span>
+                <svg class="model-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
 
-          <div v-if="modelPickerOpen" class="model-dropdown">
-            <div
-              v-for="m in models"
-              :key="m"
-              class="model-option"
-              :class="{ active: m === activeModelName }"
-              @click="pickModel(m)"
-            >
-              <div class="model-option-head">
-                <span class="model-option-name">{{ m }}</span>
-                <span v-if="m === activeModelName" class="model-active-tag">当前</span>
+              <div v-if="modelPickerOpen" class="model-dropdown">
+                <div
+                  v-for="m in models"
+                  :key="m"
+                  class="model-option"
+                  :class="{ active: m === activeModelName }"
+                  :title="m"
+                  @click="pickModel(m)"
+                >
+                  <div class="model-option-head">
+                    <span class="model-option-name">{{ m }}</span>
+                  </div>
+                </div>
               </div>
             </div>
+
+            <!-- Circular arrow send / stop -->
+            <button
+              v-if="isWaiting"
+              type="button"
+              class="send-circle stop"
+              title="停止生成"
+              @click="stopGenerating"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+            </button>
+            <button
+              v-else
+              type="button"
+              class="send-circle"
+              :disabled="!input.trim()"
+              title="发送"
+              @click="sendMessage"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="20" y2="12"></line><polyline points="13 5 20 12 13 19"></polyline></svg>
+            </button>
           </div>
         </div>
       </div>
@@ -747,49 +781,76 @@ const currentTypingMsg = computed(() =>
 .md-content :deep(a) { color: var(--primary-color); }
 .md-content :deep(strong) { font-weight: 600; }
 
-/* Input footer + model selector */
+/* Input footer: vertical dialogue box (input on top, model/send row below) */
 .chat-footer {
-  display: flex; flex-direction: column; gap: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--border-color);
 }
-.chat-inputbar {
-  display: flex; align-items: flex-end; gap: 10px;
+.chat-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 8px 8px 6px;
+  transition: border-color .18s ease;
 }
-.input-area {
-  flex: 1; resize: none; min-height: 40px; max-height: 140px;
-  background: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 10px;
-  padding: 10px 12px; font-size: 13.5px; color: var(--text-main); outline: none;
-  line-height: 1.55;
-}
-.input-area:focus { border-color: var(--primary-color); }
-.send-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  background: var(--primary-color); color: #fff; border: none; padding: 9px 20px;
-  border-radius: 10px; font-size: 13.5px; font-weight: 600; cursor: pointer;
-  transition: opacity .18s ease;
-}
-.send-btn:disabled { opacity: .55; cursor: not-allowed; }
-.send-btn.stop { background: var(--danger-color, #ef4444); }
+.chat-box:focus-within { border-color: var(--primary-color); }
 
-/* Chat model selector strip */
-.model-strip { position: relative; align-self: stretch; }
+/* Model selector (bottom-left) */
+.model-select-wrap { position: relative; flex-shrink: 0; align-self: center; }
 .model-chip {
   display: inline-flex; align-items: center; gap: 6px;
-  background: var(--bg-sidebar); border: 1px solid var(--border-color);
-  color: var(--text-secondary); border-radius: 9px;
-  padding: 6px 10px; font-size: 12px; cursor: pointer;
-  transition: color .18s ease, border-color .18s ease;
+  max-width: 230px;
+  background: transparent; border: 1px solid transparent; border-radius: 9px;
+  color: var(--text-secondary); padding: 6px 8px; font-size: 13px; cursor: pointer;
+  transition: color .18s ease, background-color .18s ease;
 }
-.model-chip:hover { color: var(--primary-color); border-color: var(--primary-color); }
+.model-chip:hover { color: var(--primary-color); background: var(--bg-main); }
 .model-chip-label {
-  max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  flex: 1 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.model-chevron { color: var(--text-muted); transition: transform .18s ease; }
+.model-chip > svg { flex-shrink: 0; }
+.model-chevron { flex-shrink: 0; color: var(--text-muted); transition: transform .18s ease; }
 .model-chip:hover .model-chevron { transform: translateY(1px); }
+
+/* Top input */
+.input-area {
+  width: 100%; resize: none; min-height: 34px; max-height: 120px;
+  background: transparent; border: none; outline: none;
+  padding: 4px 2px; font-size: 13.5px; color: var(--text-main);
+  line-height: 1.55;
+}
+
+/* Bottom control row */
+.chat-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 38px;
+  padding-top: 2px;
+}
+
+/* Circular arrow send / stop state */
+.send-circle {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0;
+  background: var(--primary-color); color: #fff; border: none; border-radius: 50%;
+  cursor: pointer; transition: opacity .18s ease, background-color .18s ease;
+}
+.send-circle:hover:not(:disabled) { filter: brightness(1.06); }
+.send-circle:disabled { opacity: .4; cursor: not-allowed; }
+.send-circle.stop { background: var(--danger-color, #ef4444); }
+.send-circle.stop:hover { filter: none; }
+
 .model-dropdown {
   position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 30;
-  min-width: 250px; max-width: 340px; max-height: 280px; overflow-y: auto;
+  width: max-content; min-width: 140px; max-width: 340px;
+  max-height: 280px; overflow-y: auto;
   background: var(--bg-main); border: 1px solid var(--border-color);
   border-radius: 11px; box-shadow: 0 10px 28px rgba(0,0,0,.14);
   padding: 5px; display: flex; flex-direction: column;
@@ -801,11 +862,10 @@ const currentTypingMsg = computed(() =>
 }
 .model-option:hover { background: var(--primary-light); }
 .model-option.active { background: color-mix(in srgb, var(--primary-color) 12%, transparent); }
-.model-option-head { display: flex; align-items: center; gap: 8px; }
-.model-option-name { font-size: 13px; font-weight: 600; }
-.model-active-tag {
-  margin-left: auto; font-size: 10px; font-weight: 700; color: #fff;
-  background: var(--primary-color); padding: 1px 7px; border-radius: 10px;
+.model-option-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.model-option-name {
+  font-size: 14px; font-weight: 600;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 /* 模型 rows — spread across the page width */
 .model-editor {
