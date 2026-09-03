@@ -639,6 +639,7 @@ const closeWindow = () => getCurrentWindow().close();
         @complete-task="handleCompleteTaskFromAI"
         @delete-task="handleDeleteTaskFromAI"
         @update-task="handleUpdateTaskFromAI"
+        @open-settings="showSettingsModal = true"
       />
     </div>
 

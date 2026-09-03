@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useTheme } from '../composables/useTheme';
 import { useUpdate } from '../composables/useUpdate';
+import { useAIConfig } from '../composables/useAIConfig';
 import UpdateModal from './UpdateModal.vue';
 import ChangelogModal from './ChangelogModal.vue';
 
-defineProps<{ show: boolean }>();
+const props = defineProps<{ show: boolean }>();
 const emit = defineEmits<{ (e: 'close'): void }>();
 
 const { primaryColor, themeColors, setPrimaryColor, themeMode, setThemeMode } = useTheme();
@@ -22,9 +23,88 @@ const {
   progressPercent
 } = useUpdate();
 
-const activeTab = ref<'general' | 'shortcuts'>('general');
+const {
+  endpoint,
+  apiKey,
+  models,
+  activeModel,
+  streaming,
+  webSearch,
+  searchEngine,
+  tavilyApiKey,
+  bochaApiKey,
+  setConnection,
+  setModels,
+  setStreaming,
+  setWebSearch,
+  setSearchEngine,
+  setTavilyApiKey,
+  setBochaApiKey,
+} = useAIConfig();
+
+const activeTab = ref<'general' | 'ai' | 'shortcuts'>('general');
 const showUpdateModal = ref(false);
 const showChangelogModal = ref(false);
+
+let draftSeq = 0;
+const draftEndpoint = ref(endpoint.value);
+const draftApiKey = ref(apiKey.value);
+const draftStreaming = ref(streaming.value);
+const draftWebSearch = ref(webSearch.value);
+const draftSearchEngine = ref(searchEngine.value);
+const draftTavilyKey = ref(tavilyApiKey.value);
+const draftBochaKey = ref(bochaApiKey.value);
+const draftModels = ref<{ id: number; name: string }[]>(
+  models.value.map((m) => ({ id: ++draftSeq, name: m })),
+);
+const saveSuccess = ref(false);
+
+const syncAIDrafts = () => {
+  draftEndpoint.value = endpoint.value;
+  draftApiKey.value = apiKey.value;
+  draftStreaming.value = streaming.value;
+  draftWebSearch.value = webSearch.value;
+  draftSearchEngine.value = searchEngine.value;
+  draftTavilyKey.value = tavilyApiKey.value;
+  draftBochaKey.value = bochaApiKey.value;
+  draftModels.value = models.value.map((m) => ({ id: ++draftSeq, name: m }));
+  saveSuccess.value = false;
+};
+
+watch(() => props.show, (shown) => {
+  if (shown) syncAIDrafts();
+});
+
+const addModelRow = () => {
+  draftModels.value = [...draftModels.value, { id: ++draftSeq, name: '' }];
+};
+
+const removeModelRow = (id: number) => {
+  draftModels.value = draftModels.value.filter((r) => r.id !== id);
+  if (draftModels.value.length === 0) addModelRow();
+};
+
+const canSaveAIConfig = computed(() => {
+  if (!draftEndpoint.value.trim()) return false;
+  return draftModels.value.some((r) => r.name.trim().length > 0);
+});
+
+const handleSaveAIConfig = () => {
+  setConnection(draftEndpoint.value, draftApiKey.value);
+  setStreaming(draftStreaming.value);
+  setWebSearch(draftWebSearch.value);
+  setSearchEngine(draftSearchEngine.value);
+  setTavilyApiKey(draftTavilyKey.value);
+  setBochaApiKey(draftBochaKey.value);
+  const names = draftModels.value
+    .map((r) => r.name.trim())
+    .filter((n) => n.length > 0);
+  setModels(names, activeModel.value || null);
+  saveSuccess.value = true;
+  setTimeout(() => {
+    saveSuccess.value = false;
+  }, 2200);
+};
 
 const colorNames: Record<string, string> = {
   '#3b82f6': '经典蓝',
@@ -66,6 +146,15 @@ const handleManualCheck = async () => {
             <button 
               type="button"
               class="nav-item" 
+              :class="{ active: activeTab === 'ai' }" 
+              @click.stop="activeTab = 'ai'"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="9" width="16" height="11" rx="3"></rect><line x1="9" y1="9" x2="9" y2="5.5"></line><line x1="15" y1="9" x2="15" y2="5.5"></line><circle cx="9" cy="4" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="15" cy="4" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="9" cy="14.5" r="1.3" fill="currentColor" stroke="none"></circle><circle cx="15" cy="14.5" r="1.3" fill="currentColor" stroke="none"></circle></svg>
+              AI 模型
+            </button>
+            <button 
+              type="button"
+              class="nav-item" 
               :class="{ active: activeTab === 'shortcuts' }" 
               @click.stop="activeTab = 'shortcuts'"
             >
@@ -78,7 +167,7 @@ const handleManualCheck = async () => {
         <!-- 右侧主内容区域 -->
         <main class="settings-content">
           <div class="content-header">
-            <h2 class="content-title">{{ activeTab === 'general' ? '通用设置' : '快捷键说明' }}</h2>
+            <h2 class="content-title">{{ activeTab === 'general' ? '通用设置' : activeTab === 'shortcuts' ? '快捷键说明' : 'AI 模型配置' }}</h2>
             <button type="button" class="close-icon-btn" @click.stop="emit('close')" title="关闭">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
@@ -249,6 +338,169 @@ const handleManualCheck = async () => {
                 </div>
               </div>
             </div>
+
+            <!-- AI 模型配置页签内容 -->
+            <div v-if="activeTab === 'ai'" class="tab-panel ai-panel">
+              <!-- 请求地址 -->
+              <div class="ai-card-block">
+                <label class="ai-label" for="ai-endpoint">请求地址</label>
+                <input
+                  id="ai-endpoint"
+                  class="ai-input mono"
+                  type="text"
+                  spellcheck="false"
+                  v-model="draftEndpoint"
+                  placeholder="https://api.deepseek.com/v1"
+                />
+              </div>
+
+              <!-- API Key -->
+              <div class="ai-card-block">
+                <label class="ai-label" for="ai-key">API Key</label>
+                <input
+                  id="ai-key"
+                  class="ai-input mono"
+                  type="password"
+                  autocomplete="off"
+                  spellcheck="false"
+                  v-model="draftApiKey"
+                  placeholder="sk-…"
+                />
+              </div>
+
+              <!-- 可用模型列表 -->
+              <div class="ai-card-block">
+                <div class="ai-head-row">
+                  <label class="ai-label">可用模型</label>
+                  <button type="button" class="ai-add-btn" @click.prevent="addModelRow">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    添加模型
+                  </button>
+                </div>
+                <div class="ai-models-list">
+                  <div v-for="row in draftModels" :key="row.id" class="ai-model-row">
+                    <input
+                      class="ai-input mono"
+                      type="text"
+                      spellcheck="false"
+                      v-model="row.name"
+                      placeholder="deepseek-chat"
+                    />
+                    <button
+                      type="button"
+                      class="ai-row-del"
+                      :disabled="draftModels.length <= 1"
+                      title="移除该模型"
+                      @click.prevent="removeModelRow(row.id)"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 流式输出 -->
+              <div class="ai-card-row">
+                <div class="setting-info">
+                  <div class="info-text">
+                    <span class="card-title">流式输出</span>
+                    <span class="card-desc">逐字显示模型回复，体验更流畅</span>
+                  </div>
+                </div>
+                <div
+                  class="toggle-switch"
+                  :class="{ active: draftStreaming }"
+                  @click.stop="draftStreaming = !draftStreaming"
+                >
+                  <div class="toggle-knob"></div>
+                </div>
+              </div>
+
+              <!-- 实时网络检索 -->
+              <div class="ai-card-block">
+                <div class="ai-toggle-row">
+                  <div class="info-text">
+                    <span class="card-title">实时网络检索 (Search)</span>
+                    <span class="card-desc">询问时效性问题时自动检索互联网最新资讯</span>
+                  </div>
+                  <div
+                    class="toggle-switch"
+                    :class="{ active: draftWebSearch }"
+                    @click.stop="draftWebSearch = !draftWebSearch"
+                  >
+                    <div class="toggle-knob"></div>
+                  </div>
+                </div>
+
+                <!-- 搜索引擎配置 -->
+                <div v-if="draftWebSearch" class="ai-search-options">
+                  <div class="ai-engine-title">搜索引擎源</div>
+                  <div class="ai-engine-radios">
+                    <label class="ai-engine-radio" :class="{ active: draftSearchEngine === 'builtin' }">
+                      <input type="radio" value="builtin" v-model="draftSearchEngine" />
+                      <div class="ai-radio-text">
+                        <span class="engine-name">内置免费检索（推荐）</span>
+                        <span class="engine-desc">无需配置任何 Key，支持通用资讯、A股行情与天气</span>
+                      </div>
+                    </label>
+                    <label class="ai-engine-radio" :class="{ active: draftSearchEngine === 'bocha' }">
+                      <input type="radio" value="bocha" v-model="draftSearchEngine" />
+                      <div class="ai-radio-text">
+                        <span class="engine-name">博查 AI 搜索（国内推荐）</span>
+                        <span class="engine-desc">国内专为大模型打造的联网搜索</span>
+                      </div>
+                    </label>
+                    <label class="ai-engine-radio" :class="{ active: draftSearchEngine === 'tavily' }">
+                      <input type="radio" value="tavily" v-model="draftSearchEngine" />
+                      <div class="ai-radio-text">
+                        <span class="engine-name">Tavily Search API</span>
+                        <span class="engine-desc">专业 AI 搜索引擎（需自备 Key）</span>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div v-if="draftSearchEngine === 'bocha'" class="ai-key-box">
+                    <label class="ai-label" for="bocha-key">博查 API Key</label>
+                    <input
+                      id="bocha-key"
+                      class="ai-input mono"
+                      type="password"
+                      v-model="draftBochaKey"
+                      placeholder="sk-…"
+                    />
+                    <div class="ai-hint">可在 bochaai.com 获取；未填或耗尽时自动回退到内置免费检索。</div>
+                  </div>
+
+                  <div v-if="draftSearchEngine === 'tavily'" class="ai-key-box">
+                    <label class="ai-label" for="tavily-key">Tavily API Key</label>
+                    <input
+                      id="tavily-key"
+                      class="ai-input mono"
+                      type="password"
+                      v-model="draftTavilyKey"
+                      placeholder="tvly-…"
+                    />
+                    <div class="ai-hint">未填写或耗尽时自动回退到内置免费检索。</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 底部保存按钮行 -->
+              <div class="ai-save-footer">
+                <span v-if="saveSuccess" class="ai-save-toast">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  配置已保存并生效
+                </span>
+                <button
+                  type="button"
+                  class="ai-save-btn"
+                  :disabled="!canSaveAIConfig"
+                  @click="handleSaveAIConfig"
+                >
+                  保存配置
+                </button>
+              </div>
+            </div>
           </div>
         </main>
       </div>
@@ -300,9 +552,9 @@ const handleManualCheck = async () => {
 }
 
 .modal-card {
-  width: 580px;
-  height: 480px;
-  max-height: 85vh;
+  width: 630px;
+  height: 520px;
+  max-height: 88vh;
   background: var(--bg-main);
   border: 1px solid var(--border-color);
   border-radius: 16px;
@@ -360,6 +612,11 @@ const handleManualCheck = async () => {
   cursor: pointer;
   transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
   text-align: left;
+}
+
+.nav-item svg {
+  flex-shrink: 0;
+  color: inherit;
 }
 
 .nav-item:hover:not(.active) {
@@ -631,5 +888,256 @@ const handleManualCheck = async () => {
   font-weight: 500;
   color: var(--primary-color);
   animation: fadeIn 0.25s ease-in-out;
+}
+
+/* AI Model Configuration Panel */
+.ai-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 8px;
+}
+
+.ai-card-block {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-card-row {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  height: 60px;
+  min-height: 60px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ai-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.ai-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.ai-hint {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.ai-hint.tip {
+  color: var(--primary-color);
+}
+
+.ai-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-main);
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.ai-input.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.ai-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 18%, transparent);
+}
+
+.ai-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ai-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px dashed var(--primary-color);
+  color: var(--primary-color);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.ai-add-btn:hover {
+  background: var(--primary-light);
+}
+
+.ai-models-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-model-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-row-del {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  background: var(--bg-main);
+  color: var(--text-muted);
+  border-radius: 7px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.18s ease;
+}
+
+.ai-row-del:hover:not(:disabled) {
+  color: var(--danger-color, #ef4444);
+  border-color: var(--danger-color, #ef4444);
+  background: color-mix(in srgb, var(--danger-color, #ef4444) 10%, transparent);
+}
+
+.ai-row-del:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ai-search-options {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-engine-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ai-engine-radios {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-engine-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-main);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ai-engine-radio.active {
+  border-color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+}
+
+.ai-engine-radio input {
+  margin-top: 2px;
+  accent-color: var(--primary-color);
+}
+
+.ai-radio-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.engine-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.engine-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.ai-key-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ai-save-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.ai-save-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--success-color, #16a34a);
+  font-weight: 500;
+  animation: fadeIn 0.2s ease;
+}
+
+.ai-save-btn {
+  padding: 8px 20px;
+  background: var(--primary-color);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.18s ease, transform 0.1s ease;
+}
+
+.ai-save-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.ai-save-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.ai-save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

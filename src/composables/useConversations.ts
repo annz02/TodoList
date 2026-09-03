@@ -1,21 +1,14 @@
-import { ref, computed, type Ref, type ComputedRef } from 'vue';
+import { ref, computed, watch, type Ref, type ComputedRef } from 'vue';
 import type { SearchResult } from './useWebSearch';
 
 // ---------------------------------------------------------------------------
-// In-memory multi-conversation store for the AI assistant.
+// Persistent multi-conversation store for the AI assistant.
 //
-// Design notes:
-//  * State lives at MODULE scope (declared once, not per <script setup> run),
-//    so it survives Vue component unmount/remount. Switching the "ai-chat"
-//    page off and on in App.vue destroys and recreates AIChatView, but the
-//    conversation roster here is untouched.
-//  * It is intentionally NOT persisted to localStorage. Conversations are kept
-//    for the lifetime of a single process run (one app launch) and are dropped
-//    when the process exits, i.e. a fresh launch starts with a single new,
-//    empty(ish) conversation.
+// Conversations and messages are persisted to localStorage so they survive
+// closing and reopening the desktop app. Data remains local to this device
+// and is cleared if the app data is removed upon uninstallation.
 // ---------------------------------------------------------------------------
 
-// ---- Shared message/type defs moved here from AIChatView.vue ----
 export interface AgentStep {
   name: string;
   title: string;
@@ -37,8 +30,6 @@ export interface Conversation {
   updatedAt: number;
 }
 
-// Meta shown in the history list. Kept intentionally light (no messages) so
-// the panel doesn't drag the full payload of every conversation.
 export interface ConversationMeta {
   id: string;
   label: string;
@@ -46,21 +37,19 @@ export interface ConversationMeta {
   updatedAt: number;
 }
 
+const KEY_CONVERSATIONS = 'ai_chat_conversations';
+const KEY_ACTIVE_ID = 'ai_chat_active_id';
+
 const helpText = `你好，我是 AI 助手 ✨
 
 我可以：
-- **自由对话**：在下方输入框提问，与我进行多轮对话。
-- **一键生成工作日报**：点击顶部「今日工作日报」，我会结合你今天的任务与 Git 提交记录为你生成日报。
+- **自由对话 & 任务管理**：在下方输入框提问，支持日程规划、增删改查任务与联网搜索（需配置大模型）。
+- **一键生成工作日报**：点击顶部「今日工作日报」，结合今日任务与 Git 记录生成总结（未配置模型时也可使用本地内置规则生成基础日报）。
 
-在下方输入框下方的模型选择器中选择并配置模型（右上角 ⚙️ 也可进入模型配置）后可获得最佳体验；未配置 API Key 时会使用内置规则生成简单结果。`;
+请先点击左下角 ⚙️「设置」完成模型配置，配置后即可在输入框下方自由切换模型；未配置 API Key 时无法进行通用问答。`;
 
-// Global, monotonic, never-reused counters. Moving id generation here fixes the
-// original bug where a component-local idSeq + seed re-ran on every remount.
 let convSeq = 0;
-let idSeq = 1;
-
-const conversations = ref<Conversation[]>([]);
-const activeId = ref<string>('');
+let idSeq = 0;
 
 function formatConvTime(ts?: number): string {
   if (!ts) return '';
@@ -103,25 +92,108 @@ const titleOf = (msgs: LocalMsg[]): string => {
   return t ? `${t}…` : '新对话';
 };
 
-// Create a brand-new conversation seeded with the welcome bubble and make it
-// the active one. Called once at module load and each time the user clicks
-// "+ New conversation".
+function loadStoredConversations(): { list: Conversation[]; activeId: string } | null {
+  try {
+    const raw = localStorage.getItem(KEY_CONVERSATIONS);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+
+    let maxConv = 0;
+    let maxId = 0;
+    const list: Conversation[] = [];
+
+    for (const item of parsed) {
+      if (!item || typeof item !== 'object' || typeof item.id !== 'string') continue;
+      const m = item.id.match(/^c(\d+)$/);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (!isNaN(n) && n > maxConv) maxConv = n;
+      }
+      const msgs: LocalMsg[] = Array.isArray(item.messages)
+        ? item.messages.filter((msg: any) => {
+            if (!msg || typeof msg !== 'object') return false;
+            if (typeof msg.id === 'number' && msg.id > maxId) maxId = msg.id;
+            return typeof msg.role === 'string' && typeof msg.content === 'string';
+          })
+        : [];
+      list.push({
+        id: item.id,
+        label: typeof item.label === 'string' && item.label ? item.label : '新对话',
+        messages: msgs,
+        updatedAt: typeof item.updatedAt === 'number' ? item.updatedAt : Date.now(),
+      });
+    }
+
+    if (list.length === 0) return null;
+
+    convSeq = maxConv;
+    idSeq = maxId;
+
+    const savedActiveId = localStorage.getItem(KEY_ACTIVE_ID) || '';
+    const active = list.some((c) => c.id === savedActiveId) ? savedActiveId : list[list.length - 1].id;
+
+    return { list, activeId: active };
+  } catch (e) {
+    console.error('Failed to load stored conversations:', e);
+    return null;
+  }
+}
+
+const stored = loadStoredConversations();
+const conversations = ref<Conversation[]>(stored?.list ?? []);
+const activeId = ref<string>(stored?.activeId ?? '');
+
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flushPersist(): void {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  try {
+    localStorage.setItem(KEY_CONVERSATIONS, JSON.stringify(conversations.value));
+    localStorage.setItem(KEY_ACTIVE_ID, activeId.value);
+  } catch (e) {
+    console.error('Failed to save conversations:', e);
+  }
+}
+
+function persist(): void {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    flushPersist();
+  }, 400);
+}
+
 function freshConversation(): void {
   const id = `c${++convSeq}`;
   const conv: Conversation = {
     id,
     label: '新对话',
-    messages: [{ id: idSeq++, role: 'assistant', content: helpText }],
+    messages: [{ id: ++idSeq, role: 'assistant', content: helpText }],
     updatedAt: Date.now(),
   };
   conversations.value.push(conv);
   activeId.value = id;
+  flushPersist();
 }
 
-// Module init: seed the very first conversation. Because this runs at import
-// time (not per component mount), it never re-adds the welcome bubble when the
-// AIChatView page is navigated away and back.
-freshConversation();
+if (conversations.value.length === 0) {
+  freshConversation();
+}
+
+watch(conversations, () => persist(), { deep: true });
+watch(activeId, (newId) => {
+  try {
+    localStorage.setItem(KEY_ACTIVE_ID, newId);
+  } catch {}
+});
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', flushPersist);
+}
 
 const activeConversation = computed<Conversation | undefined>(() =>
   conversations.value.find((c) => c.id === activeId.value),
@@ -136,6 +208,7 @@ export interface ConversationsStore {
   nextMessageId: () => number;
   selectConversation: (id: string) => void;
   newConversation: () => void;
+  deleteConversation: (id: string) => void;
   refreshLabelIfUntitled: () => void;
   touchActiveConversation: () => void;
 }
@@ -150,17 +223,9 @@ export function useConversations(): ConversationsStore {
     })),
   );
 
-  // The active conversation's message array. AIChatView keeps a reference to
-  // this computed and mutates the array in place (push / slice / element
-  // field writes), which Vue tracks because the nested array is deep-reactive
-  // inside the top-level `conversations` ref. Returning the same array object
-  // per active conversation means existing streaming/send code is unchanged.
   const messages = computed<LocalMsg[]>(() => activeConversation.value?.messages ?? []);
-
   const currentLabel = computed<string>(() => activeConversation.value?.label ?? '新对话');
 
-  // If the active conversation still has the placeholder label but now holds a
-  // real user turn, derive a readable title from its first user message.
   function refreshLabelIfUntitled(): void {
     const c = activeConversation.value;
     if (!c) return;
@@ -168,6 +233,7 @@ export function useConversations(): ConversationsStore {
       c.label = titleOf(c.messages);
     }
     c.updatedAt = Date.now();
+    flushPersist();
   }
 
   function touchActiveConversation(): void {
@@ -175,6 +241,7 @@ export function useConversations(): ConversationsStore {
     if (c) {
       c.updatedAt = Date.now();
     }
+    persist();
   }
 
   function selectConversation(id: string): void {
@@ -186,15 +253,29 @@ export function useConversations(): ConversationsStore {
     freshConversation();
   }
 
+  function deleteConversation(id: string): void {
+    const idx = conversations.value.findIndex((c) => c.id === id);
+    if (idx < 0) return;
+    conversations.value.splice(idx, 1);
+    if (conversations.value.length === 0) {
+      freshConversation();
+    } else if (activeId.value === id) {
+      const nextIdx = Math.max(0, idx - 1);
+      activeId.value = conversations.value[nextIdx].id;
+    }
+    flushPersist();
+  }
+
   return {
     conversations,
     conversationsMeta,
     activeId,
     messages,
     currentLabel,
-    nextMessageId: () => idSeq++,
+    nextMessageId: () => ++idSeq,
     selectConversation,
     newConversation,
+    deleteConversation,
     refreshLabelIfUntitled,
     touchActiveConversation,
   };

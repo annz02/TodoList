@@ -15,10 +15,10 @@ const emit = defineEmits<{
   (e: 'complete-task', taskTitleOrId: string): void;
   (e: 'delete-task', taskTitleOrId: string): void;
   (e: 'update-task', data: { taskTitleOrId: string; newTitle?: string; newCategory?: string; newDueDate?: string }): void;
+  (e: 'open-settings'): void;
 }>();
 
 const {
-  endpoint,
   apiKey,
   models,
   connection,
@@ -27,14 +27,8 @@ const {
   searchEngine,
   tavilyApiKey,
   bochaApiKey,
-  setConnection,
-  setModels,
   setActiveModel,
-  setStreaming,
   setWebSearch,
-  setSearchEngine,
-  setTavilyApiKey,
-  setBochaApiKey,
 } = useAIConfig();
 const { sendChat } = useChatStream();
 const { search, fetchWebpage } = useWebSearch();
@@ -254,25 +248,11 @@ function findTaskInList(tasks: Todo[], query: string): Todo | undefined {
 }
 
 
-// ---------------------------------------------------------------------------
-// Single-connection model manager (settings page + the chat model chip)
-// ---------------------------------------------------------------------------
-// Drafts for the ONE request address + API key (committed via 保存).
-const draftEndpoint = ref(endpoint.value);
-const draftApiKey = ref(apiKey.value);
-const draftWebSearch = ref(webSearch.value);
-const draftSearchEngine = ref(searchEngine.value);
-const draftTavilyKey = ref(tavilyApiKey.value);
-const draftBochaKey = ref(bochaApiKey.value);
-// Editable model rows under that connection — one input per model name.
-let draftSeq = 0;
-const draftModels = ref<{ id: number; name: string }[]>([]);
 // Whether the in-place model dropdown in the chat footer is open.
 const modelPickerOpen = ref(false);
 
 const activeModelName = computed(() => connection.value.model);
 
-const view = ref<'chat' | 'settings'>('chat');
 const input = ref('');
 const isWaiting = ref(false);
 const abortCtrl = ref<AbortController | null>(null);
@@ -362,7 +342,7 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
 
   const system = apiKey.value.trim()
     ? `你是 Todolist 中的待办助手，由用户配置的大模型服务驱动。当前接入地址：${cfg.endpoint}；当前使用模型：${cfg.model}。当前时间：${dateStr}。\n【身份如实准则】：当被问到你是什么模型、由谁驱动、基于什么架构或框架时，请如实说明你是由用户配置的大模型服务（接入地址 ${cfg.endpoint}、模型 ${cfg.model}）驱动的待办助手，不要自称使用任何未用户配置或虚构的框架、架构或底层模型。\n【工具能力】：你可为用户调用待办管理与网络工具：\n- create_task: 新建待办；\n- update_task: 修改已有待办的标题、分类、截止时间；\n- delete_task: 删除某项待办；\n- complete_task: 标记待办完成；\n- get_today_tasks: 查询今日任务进度；\n- web_search / fetch_webpage: 网络检索与网页精读。\n【操作准则】：当用户提出新建、修改、删除或完成待办的诉求时，请直接调用对应工具执行。用户未配置网络检索时请不要编造网络检索结果。回答请准确、专业、友好并使用中文。\n【排版要求（务必遵守）】：回答务必注重条理与可读性。\n1) 如果内容包含多个方面或步骤，先用 **加粗小节标题**（如 **一、要点分析**、**二、建议**）分节；\n2) 并列要点一律用行首符号 - 或有序 1. 2. 列表逐条列出，不要把它们吞进同一句话里；\n3) 段落与条目之间用空行分隔，不要输出连续一整段拥挤的文字墙；\n4) 不确定或有取舍时给出简短小结；内容简短时 1-3 条即可，不必强行堆砌。`
-    : '你是 Todolist 的待办助手。当前未配置大模型 API，无法进行通用问答与在线推理；当被问到你是什么模型或由什么驱动时，请如实说明当前由软件内置规则驱动，并友好提醒用户在下方模型选择器（或右上角 ⚙️ 模型配置）中填入请求地址与 API Key 后即可获得模型驱动的完整问答。如果你在生成日报，请按有结构、分段、分点的条理输出。';
+    : '你是 Todolist 的待办助手。当前未配置大模型 API，无法进行通用问答与在线推理；当被问到你是什么模型或由什么驱动时，请如实说明当前由软件内置规则驱动，并友好提醒用户先点击左下角 ⚙️「设置」完成模型配置，即可获得模型驱动的完整问答。如果你在生成日报，请按有结构、分段、分点的条理输出。';
 
   // Only feed the most recent turns to the model, so very long chats don't
   // overflow the context window nor re-inject stale raw tool/step walls. Each
@@ -791,7 +771,7 @@ const sendMessage = async () => {
   if (apiKey.value.trim()) {
     await streamInto(tail);
   } else {
-    tail.content = '（尚未配置 API Key，请在输入框下方或 ⚙️ 模型配置中填写后即可与我对话；通用问答需要模型支持。）';
+    tail.content = '（尚未配置 API Key，请先点击左下角 ⚙️「设置」完成模型配置后即可与我对话；通用问答需要模型支持。）';
     await scrollToBottom();
   }
 };
@@ -850,7 +830,6 @@ const generateDailyReport = async () => {
 const copiedMsgId = ref<number | null>(null);
 
 const copyMessage = async (msg: LocalMsg) => {
-  if (isWaiting.value && msg.id === currentTypingMsg.value) return;
   const text = msg.content.trim();
   if (!text) return;
   try {
@@ -881,60 +860,6 @@ const switchConversation = (id: string) => {
   nextTick(() => scrollToBottom());
 };
 
-// ---------- Model manager settings ----------
-const openSettings = () => {
-  // Make the drafts reflect the current saved config.
-  draftEndpoint.value = endpoint.value;
-  draftApiKey.value = apiKey.value;
-  draftWebSearch.value = webSearch.value;
-  draftSearchEngine.value = searchEngine.value;
-  draftTavilyKey.value = tavilyApiKey.value;
-  draftBochaKey.value = bochaApiKey.value;
-  draftModels.value = models.value.map((m) => ({ id: ++draftSeq, name: m }));
-  modelPickerOpen.value = false;
-  view.value = 'settings';
-};
-
-const backToChat = () => {
-  view.value = 'chat';
-};
-
-// Add an empty model row to the draft list.
-const addModelRow = () => {
-  draftModels.value = [...draftModels.value, { id: ++draftSeq, name: '' }];
-};
-
-// Remove a draft model row by its row id (always keeps at least one row).
-const removeModelRow = (id: number) => {
-  draftModels.value = draftModels.value.filter((r) => r.id !== id);
-  if (draftModels.value.length === 0) addModelRow();
-};
-
-// Commit the whole single connection: request address + key + model rows + web search.
-const handleSaveConfig = () => {
-  setConnection(draftEndpoint.value, draftApiKey.value);
-  setWebSearch(draftWebSearch.value);
-  setSearchEngine(draftSearchEngine.value);
-  setTavilyApiKey(draftTavilyKey.value);
-  setBochaApiKey(draftBochaKey.value);
-  const names = draftModels.value
-    .map((r) => r.name)
-    .map((n) => n.trim())
-    .filter((n) => n.length > 0);
-  // Keep the currently active model if it's still configured; otherwise setModels
-  // falls back to the first model. The model switch happens in the chat footer.
-  setModels(names, activeModelName.value || null);
-  backToChat();
-};
-
-const toggleStreaming = () => setStreaming(!streaming.value);
-
-// Can only save when an address is present and at least one model name is filled.
-const canSaveConfig = computed(() => {
-  if (!draftEndpoint.value.trim()) return false;
-  return draftModels.value.some((r) => r.name.trim().length > 0);
-});
-
 // Pick a model from the chat footer chip dropdown (immediate, live).
 const pickModel = (name: string) => {
   setActiveModel(name);
@@ -949,66 +874,68 @@ const currentTypingMsg = computed(() =>
 
 <template>
   <div class="ai-chat">
-    <!-- ============ Chat view ============ -->
-    <template v-if="view === 'chat'">
-      <!-- Toolbar -->
-      <div class="chat-toolbar">
-        <button
-          class="tool-btn report-btn"
-          :disabled="isReportRunning || isWaiting"
-          @click="generateDailyReport"
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-          {{ isReportRunning ? '生成中…' : '今日工作日报' }}
-        </button>
+    <!-- Toolbar -->
+    <div class="chat-toolbar">
+      <button
+        class="tool-btn report-btn"
+        :disabled="isReportRunning || isWaiting"
+        @click="generateDailyReport"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+        {{ isReportRunning ? '生成中…' : '今日工作日报' }}
+      </button>
 
-        <div class="toolbar-actions">
-          <!-- Conversation history -->
-          <div class="hist-wrap">
-            <button
-              class="tool-btn icon"
-              :class="{ active: historyOpen }"
-              title="最近"
-              :disabled="isWaiting || isReportRunning"
-              @click="historyOpen = !historyOpen"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
-            </button>
+      <div class="toolbar-actions">
+        <!-- Conversation history -->
+        <div class="hist-wrap">
+          <button
+            class="tool-btn icon"
+            :class="{ active: historyOpen }"
+            title="历史记录"
+            :disabled="isWaiting || isReportRunning"
+            @click="historyOpen = !historyOpen"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline><polyline points="12 7 12 12 15 15"></polyline></svg>
+          </button>
 
-            <div v-if="historyOpen" class="hist-panel">
-              <div class="hist-head">
-                <span>最近</span>
+          <div v-if="historyOpen" class="hist-panel">
+            <div class="hist-head">
+              <span>最近</span>
+              <button
+                type="button"
+                class="hist-new"
+                :disabled="isWaiting || isReportRunning"
+                @click="startNewConversation"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                <span>新聊天</span>
+              </button>
+            </div>
+            <div class="hist-list">
+              <div
+                v-for="c in conversations.conversationsMeta.value"
+                :key="c.id"
+                class="hist-item"
+                :class="{ active: c.id === conversations.activeId.value }"
+                :title="c.label"
+                @click="switchConversation(c.id)"
+              >
+                <span class="hist-item-title">{{ c.label }}</span>
+                <span v-if="c.timeText" class="hist-item-time">{{ c.timeText }}</span>
                 <button
                   type="button"
-                  class="hist-new"
-                  :disabled="isWaiting || isReportRunning"
-                  @click="startNewConversation"
+                  class="hist-item-delete"
+                  title="删除会话"
+                  @click.stop="conversations.deleteConversation(c.id)"
                 >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                  <span>新聊天</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                 </button>
-              </div>
-              <div class="hist-list">
-                <div
-                  v-for="c in conversations.conversationsMeta.value"
-                  :key="c.id"
-                  class="hist-item"
-                  :class="{ active: c.id === conversations.activeId.value }"
-                  :title="c.label"
-                  @click="switchConversation(c.id)"
-                >
-                  <span class="hist-item-title">{{ c.label }}</span>
-                  <span v-if="c.timeText" class="hist-item-time">{{ c.timeText }}</span>
-                </div>
               </div>
             </div>
           </div>
-
-          <button class="tool-btn icon" title="模型配置" @click="openSettings">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-          </button>
         </div>
       </div>
+    </div>
 
       <!-- Conversation -->
       <div ref="scroller" class="chat-scroll">
@@ -1070,10 +997,10 @@ const currentTypingMsg = computed(() =>
                   <i></i><i></i><i></i>
                 </span>
                 <button
+                  v-if="(msg.content || '').trim() !== ''"
                   class="copy-msg-btn"
                   :class="{ copied: copiedMsgId === msg.id }"
                   :title="copiedMsgId === msg.id ? '已复制' : '复制'"
-                  :disabled="msg.id === currentTypingMsg && msg.content === ''"
                   @click="copyMessage(msg)"
                 >
                   <svg v-if="copiedMsgId !== msg.id" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
@@ -1127,6 +1054,17 @@ const currentTypingMsg = computed(() =>
                       <span class="model-option-name">{{ m }}</span>
                     </div>
                   </div>
+                  <div class="model-dropdown-divider"></div>
+                  <div
+                    class="model-option model-option-settings"
+                    title="前往设置配置模型"
+                    @click="modelPickerOpen = false; emit('open-settings')"
+                  >
+                    <div class="model-option-head">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                      <span class="model-option-name">配置模型...</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1170,195 +1108,6 @@ const currentTypingMsg = computed(() =>
           </div>
         </div>
       </div>
-    </template>
-
-    <!-- ============ Settings page ============ -->
-    <div v-else class="settings-page">
-      <div class="settings-scroll">
-        <div class="settings-shell">
-          <!-- Page heading -->
-          <div class="brand-head">
-            <button
-              class="brand-icon back"
-              type="button"
-              @click="backToChat"
-              aria-label="返回对话"
-              title="返回对话"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-            </button>
-            <div>
-              <h2 class="brand-title">模型配置</h2>
-              <p class="brand-sub">配置调用的大模型服务，用于 AI 助手对话与日报生成。</p>
-            </div>
-          </div>
-
-          <!-- Single form: spread over the whole page width (no narrow card) -->
-          <form class="ai-config" @submit.prevent="handleSaveConfig">
-            <div class="ai-config-conn">
-              <div class="field">
-                <label class="field-label" for="ai-endpoint">请求地址</label>
-                <input
-                  id="ai-endpoint"
-                  class="field-input mono"
-                  type="text"
-                  spellcheck="false"
-                  v-model="draftEndpoint"
-                  placeholder="https://api.deepseek.com/v1"
-                />
-                <div class="field-hint">兼容 OpenAI 格式，通常以 /v1 结尾（DeepSeek、OpenAI、Ollama 等）。</div>
-              </div>
-
-              <div class="field">
-                <label class="field-label" for="ai-key">API Key</label>
-                <input
-                  id="ai-key"
-                  class="field-input mono"
-                  type="password"
-                  autocomplete="off"
-                  spellcheck="false"
-                  v-model="draftApiKey"
-                  placeholder="sk-…"
-                />
-                <div class="field-hint" :class="{ tip: draftApiKey }">
-                  {{ draftApiKey ? '密钥仅保存在本机，不会上传。' : '未填写时将仅使用内置规则生成简单结果。' }}
-                </div>
-              </div>
-            </div>
-
-            <!-- 模型：多个输入行，每行一个模型名称，横排铺开 -->
-            <div class="ai-config-section">
-              <div class="section-title">模型</div>
-              <div class="model-editor">
-                <div
-                  v-for="row in draftModels"
-                  :key="row.id"
-                  class="model-editor-row"
-                >
-                  <input
-                    class="field-input mono model-row-input"
-                    type="text"
-                    spellcheck="false"
-                    v-model="row.name"
-                    placeholder="deepseek-chat"
-                  />
-                  <button
-                    type="button"
-                    class="model-row-del"
-                    :disabled="draftModels.length <= 1"
-                    title="移除该模型"
-                    @click.prevent="removeModelRow(row.id)"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                  </button>
-                </div>
-              </div>
-              <button type="button" class="btn-add-model" @click.prevent="addModelRow">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                添加模型
-              </button>
-            </div>
-
-            <div class="ai-config-section">
-              <div class="toggle-row">
-                <div class="toggle-text">
-                  <span class="toggle-title">流式输出</span>
-                  <span class="toggle-desc">逐字显示回复，体验更流畅；关闭则等待完整结果后一次性展示。</span>
-                </div>
-                <button
-                  type="button"
-                  class="switch"
-                  :class="{ on: streaming }"
-                  :aria-pressed="streaming"
-                  @click="toggleStreaming"
-                >
-                  <span class="switch-knob"></span>
-                </button>
-              </div>
-            </div>
-
-            <!-- 实时网络检索（Search）配置 -->
-            <div class="ai-config-section">
-              <div class="toggle-row">
-                <div class="toggle-text">
-                  <span class="toggle-title">实时网络检索（Search）</span>
-                  <span class="toggle-desc">开启后，询问时效性问题（如天气、新闻、最新资讯）时自动调用实时检索并结合结果回答。</span>
-                </div>
-                <button
-                  type="button"
-                  class="switch"
-                  :class="{ on: draftWebSearch }"
-                  :aria-pressed="draftWebSearch"
-                  @click="draftWebSearch = !draftWebSearch"
-                >
-                  <span class="switch-knob"></span>
-                </button>
-              </div>
-
-              <div v-if="draftWebSearch" class="search-options-box">
-                <div class="field-label search-engine-label">搜索引擎源</div>
-                <div class="engine-radios">
-                  <label class="engine-radio-item" :class="{ active: draftSearchEngine === 'builtin' }">
-                    <input type="radio" value="builtin" v-model="draftSearchEngine" />
-                    <div class="engine-radio-text">
-                      <span class="engine-name">内置免费检索（推荐）</span>
-                      <span class="engine-sub">包含通用检索、秒级 A 股实时行情与气象中心，无需配置任何 API Key</span>
-                    </div>
-                  </label>
-                  <label class="engine-radio-item" :class="{ active: draftSearchEngine === 'bocha' }">
-                    <input type="radio" value="bocha" v-model="draftSearchEngine" />
-                    <div class="engine-radio-text">
-                      <span class="engine-name">博查 AI 搜索（国内推荐）</span>
-                      <span class="engine-sub">国内专为大模型打造的联网搜索，免翻墙、A股与时政资讯极佳</span>
-                    </div>
-                  </label>
-                  <label class="engine-radio-item" :class="{ active: draftSearchEngine === 'tavily' }">
-                    <input type="radio" value="tavily" v-model="draftSearchEngine" />
-                    <div class="engine-radio-text">
-                      <span class="engine-name">Tavily Search API</span>
-                      <span class="engine-sub">专为 AI 优化的高质量专业搜索服务（需填 Key）</span>
-                    </div>
-                  </label>
-                </div>
-
-                <div v-if="draftSearchEngine === 'bocha'" class="tavily-key-field">
-                  <label class="field-label" for="bocha-key">博查 API Key</label>
-                  <input
-                    id="bocha-key"
-                    class="field-input mono"
-                    type="password"
-                    v-model="draftBochaKey"
-                    placeholder="sk-…"
-                  />
-                  <div class="field-hint">可在 bochaai.com 免费获取；未填写或额度耗尽时自动回退到内置免费检索。</div>
-                </div>
-
-                <div v-if="draftSearchEngine === 'tavily'" class="tavily-key-field">
-                  <label class="field-label" for="tavily-key">Tavily API Key</label>
-                  <input
-                    id="tavily-key"
-                    class="field-input mono"
-                    type="password"
-                    v-model="draftTavilyKey"
-                    placeholder="tvly-…"
-                  />
-                  <div class="field-hint">未填写或额度耗尽时将自动回退到内置免费检索。</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="ai-config-actions">
-              <button type="button" class="btn-secondary" @click="backToChat">返回</button>
-              <button
-                type="submit"
-                class="btn-primary"
-                :disabled="!canSaveConfig"
-              >保存配置</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -1419,7 +1168,7 @@ const currentTypingMsg = computed(() =>
   top: calc(100% + 6px);
   right: 0;
   z-index: 50;
-  width: 270px;
+  width: 290px;
   max-height: 340px;
   display: flex;
   flex-direction: column;
@@ -1500,76 +1249,31 @@ const currentTypingMsg = computed(() =>
   color: var(--primary-color);
   opacity: 0.9;
 }
-
-/* Settings page: single full-width content column */
-.settings-page {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-.settings-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 8px 4px 28px;
-}
-.settings-shell { width: 100%; padding-bottom: 4px; }
-
-/* Heading with icon (back button) + title + subtitle */
-.brand-head {
-  display: flex;
+.hist-item-delete {
+  display: inline-flex;
   align-items: center;
-  gap: 14px;
-  padding: 4px 4px 18px;
-}
-.brand-icon.back {
-  flex-shrink: 0;
-  width: 38px; height: 38px;
-  display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 10px;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   padding: 0;
-  background: var(--primary-light);
-  color: var(--primary-color);
-  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 4px;
   cursor: pointer;
-  transition: all .18s ease;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: all .15s ease;
 }
-.brand-icon.back svg { transition: transform .18s ease; }
-.brand-icon.back:hover { background: var(--primary-color); color: #fff; box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 30%, transparent); }
-.brand-icon.back:hover svg { transform: translateX(-2px); }
-.brand-title { margin: 0; font-size: 19px; font-weight: 700; color: var(--text-main); line-height: 1.3; }
-.brand-sub { margin: 3px 0 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.55; }
+.hist-item:hover .hist-item-delete {
+  opacity: 1;
+}
+.hist-item-delete:hover {
+  background: color-mix(in srgb, var(--danger-color, #ef4444) 18%, transparent);
+  color: var(--danger-color, #ef4444) !important;
+}
 
-/* Settings form: full width, spread across the page (no card) */
-.ai-config {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
-.ai-config-conn {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-.ai-config-section {
-  margin-top: 22px;
-}
-.section-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-main);
-  margin-bottom: 12px;
-}
-.ai-config-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 28px;
-  padding-top: 18px;
-  border-top: 1px solid var(--border-color);
-}
+
 
 /* Field stack */
 .field { display: flex; flex-direction: column; }
@@ -1923,40 +1627,20 @@ const currentTypingMsg = computed(() =>
   font-size: 14px; font-weight: 600;
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* 模型 rows — spread across the page width */
-.model-editor {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 10px 18px;
+
+.model-dropdown-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 0;
 }
-.model-editor-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.model-row-input { flex: 1; }
-.model-row-del {
-  flex-shrink: 0;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 30px; height: 30px; padding: 0;
-  color: var(--text-muted); background: transparent; border: none; border-radius: 8px;
-  cursor: pointer; transition: color .15s ease, background-color .15s ease;
-}
-.model-row-del:hover:not(:disabled) {
-  color: var(--danger-color, #ef4444);
-  background: color-mix(in srgb, var(--danger-color, #ef4444) 12%, transparent);
-}
-.model-row-del:disabled { opacity: .35; cursor: not-allowed; }
-.btn-add-model {
-  align-self: flex-start;
-  display: inline-flex; align-items: center; gap: 6px;
-  margin-top: 2px;
-  font-size: 12.5px;
+.model-option-settings {
   color: var(--primary-color);
-  background: transparent; border: none; padding: 6px 8px; border-radius: 8px;
-  cursor: pointer; transition: background-color .15s ease;
 }
-.btn-add-model:hover { background: var(--primary-light); }
+.model-option-settings .model-option-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
 
 /* Left group in chat-controls (model selector + web search toggle) */
 .control-left-group {
