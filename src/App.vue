@@ -432,6 +432,9 @@ const headerSubTitle = computed(() => {
   if (activeCategory.value === 'calendar') {
     return '点击日期查看当天任务，合理规划每一天';
   }
+  if (activeCategory.value === 'ai-chat') {
+    return '';
+  }
   return currentDate.value;
 });
 
@@ -502,7 +505,7 @@ const closeWindow = () => getCurrentWindow().close();
           <h1>
             {{ activeCategory === 'today' ? '今天' : activeCategory === 'completed' ? '已完成' : activeCategory === 'calendar' ? '日历视图' : activeCategory === 'ai-chat' ? 'AI 助手' : '全部任务' }}
           </h1>
-          <div class="date">{{ headerSubTitle }}</div>
+          <div class="date" v-if="headerSubTitle">{{ headerSubTitle }}</div>
         </div>
       </div>
       <div class="header-right" style="z-index: 11;" v-if="activeCategory !== 'ai-chat'">

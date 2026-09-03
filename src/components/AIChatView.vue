@@ -20,7 +20,7 @@ const draftEndpoint = ref(endpoint.value);
 const draftModel = ref(model.value);
 const draftStreaming = ref(streaming.value);
 
-const showSettings = ref(false);
+const view = ref<'chat' | 'settings'>('chat');
 const input = ref('');
 const isWaiting = ref(false);
 const abortCtrl = ref<AbortController | null>(null);
@@ -193,12 +193,16 @@ const copyMessage = async (msg: LocalMsg) => {
 };
 
 // ---------- Settings ----------
-const toggleSettings = () => {
+const openSettings = () => {
   draftKey.value = apiKey.value;
   draftEndpoint.value = endpoint.value;
   draftModel.value = model.value;
   draftStreaming.value = streaming.value;
-  showSettings.value = !showSettings.value;
+  view.value = 'settings';
+};
+
+const backToChat = () => {
+  view.value = 'chat';
 };
 
 const saveConfig = () => {
@@ -208,7 +212,7 @@ const saveConfig = () => {
     model: draftModel.value,
     streaming: draftStreaming.value,
   });
-  showSettings.value = false;
+  view.value = 'chat';
   showToast('模型配置已保存', 2500, '完成', 'success');
 };
 
@@ -220,102 +224,165 @@ const currentTypingMsg = computed(() =>
 
 <template>
   <div class="ai-chat">
-    <!-- Toolbar -->
-    <div class="chat-toolbar">
-      <button
-        class="tool-btn report-btn"
-        :disabled="isReportRunning || isWaiting"
-        @click="generateDailyReport"
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-        {{ isReportRunning ? '生成中…' : '今日工作日报' }}
-      </button>
-
-      <div class="toolbar-actions">
+    <!-- ============ Chat view ============ -->
+    <template v-if="view === 'chat'">
+      <!-- Toolbar -->
+      <div class="chat-toolbar">
         <button
-          class="tool-btn icon"
-          :class="{ settingsOn: showSettings }"
-          title="模型配置"
-          @click="toggleSettings"
+          class="tool-btn report-btn"
+          :disabled="isReportRunning || isWaiting"
+          @click="generateDailyReport"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+          {{ isReportRunning ? '生成中…' : '今日工作日报' }}
         </button>
-      </div>
-    </div>
 
-    <!-- Settings panel -->
-    <Transition name="settings-fade">
-      <div v-if="showSettings" class="config-panel">
-        <div class="config-row">
-          <span class="config-label">API Key <em class="hint">留空时仅内置规则</em></span>
-          <input class="config-input" type="password" v-model="draftKey" placeholder="sk-…" />
-        </div>
-        <div class="config-row">
-          <span class="config-label">API Endpoint</span>
-          <input class="config-input" type="text" v-model="draftEndpoint" placeholder="https://api.deepseek.com/v1" />
-        </div>
-        <div class="config-row">
-          <span class="config-label">模型</span>
-          <input class="config-input" type="text" v-model="draftModel" placeholder="deepseek-chat / gpt-4o-mini …" />
-        </div>
-        <div class="config-row">
-          <span class="config-label">流式输出</span>
-          <div class="toggle-switch" :class="{ active: draftStreaming }" @click="draftStreaming = !draftStreaming">
-            <div class="toggle-knob"></div>
-          </div>
-        </div>
-        <div class="config-actions">
-          <button class="config-save" @click="saveConfig">保存</button>
-          <button class="config-cancel" @click="showSettings = false">取消</button>
+        <div class="toolbar-actions">
+          <button class="tool-btn icon" title="模型配置" @click="openSettings">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          </button>
         </div>
       </div>
-    </Transition>
 
-    <!-- Conversation -->
-    <div ref="scroller" class="chat-scroll">
-      <div class="chat-messages">
-        <div v-for="msg in messages" :key="msg.id" class="msg-row" :class="msg.role">
-          <div class="avatar" :class="msg.role">
-            <svg v-if="msg.role === 'assistant'" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="9" width="16" height="11" rx="3"></rect><line x1="9" y1="9" x2="9" y2="5.5"></line><line x1="15" y1="9" x2="15" y2="5.5"></line><circle cx="9" cy="4" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="15" cy="4" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="9" cy="14.5" r="1.3" fill="currentColor" stroke="none"></circle><circle cx="15" cy="14.5" r="1.3" fill="currentColor" stroke="none"></circle></svg>
-            <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-          </div>
-          <div class="bubble" :class="msg.role">
-            <template v-if="msg.role === 'assistant'">
-              <div class="md-content" v-html="renderMarkdown(msg.content)"></div>
-              <span
-                v-if="isWaiting && msg.id === currentTypingMsg && msg.content === ''"
-                class="typing"
-              >
-                <i></i><i></i><i></i>
-              </span>
-              <button
-                class="copy-msg-btn"
-                :class="{ copied: copiedMsgId === msg.id }"
-                :title="copiedMsgId === msg.id ? '已复制' : '复制'"
-                :disabled="msg.id === currentTypingMsg && msg.content === ''"
-                @click="copyMessage(msg)"
-              >
-                <svg v-if="copiedMsgId !== msg.id" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-              </button>
-            </template>
-            <pre v-else class="user-content">{{ msg.content }}</pre>
+      <!-- Conversation -->
+      <div ref="scroller" class="chat-scroll">
+        <div class="chat-messages">
+          <div v-for="msg in messages" :key="msg.id" class="msg-row" :class="msg.role">
+            <div class="avatar" :class="msg.role">
+              <svg v-if="msg.role === 'assistant'" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="9" width="16" height="11" rx="3"></rect><line x1="9" y1="9" x2="9" y2="5.5"></line><line x1="15" y1="9" x2="15" y2="5.5"></line><circle cx="9" cy="4" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="15" cy="4" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="9" cy="14.5" r="1.3" fill="currentColor" stroke="none"></circle><circle cx="15" cy="14.5" r="1.3" fill="currentColor" stroke="none"></circle></svg>
+              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            </div>
+            <div class="bubble" :class="msg.role">
+              <template v-if="msg.role === 'assistant'">
+                <div class="md-content" v-html="renderMarkdown(msg.content)"></div>
+                <span
+                  v-if="isWaiting && msg.id === currentTypingMsg && msg.content === ''"
+                  class="typing"
+                >
+                  <i></i><i></i><i></i>
+                </span>
+                <button
+                  class="copy-msg-btn"
+                  :class="{ copied: copiedMsgId === msg.id }"
+                  :title="copiedMsgId === msg.id ? '已复制' : '复制'"
+                  :disabled="msg.id === currentTypingMsg && msg.content === ''"
+                  @click="copyMessage(msg)"
+                >
+                  <svg v-if="copiedMsgId !== msg.id" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </button>
+              </template>
+              <pre v-else class="user-content">{{ msg.content }}</pre>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Input -->
-    <div class="chat-inputbar">
-      <textarea
-        v-model="input"
-        rows="1"
-        class="input-area"
-        placeholder="输入消息，Enter 发送，Shift+Enter 换行"
-        @keydown="onKeydown"
-      ></textarea>
-      <button v-if="isWaiting" class="send-btn stop" @click="stopGenerating">停止</button>
-      <button v-else class="send-btn" :disabled="!input.trim()" @click="sendMessage">发送</button>
+      <!-- Input -->
+      <div class="chat-inputbar">
+        <textarea
+          v-model="input"
+          rows="1"
+          class="input-area"
+          placeholder="输入消息，Enter 发送，Shift+Enter 换行"
+          @keydown="onKeydown"
+        ></textarea>
+        <button v-if="isWaiting" class="send-btn stop" @click="stopGenerating">停止</button>
+        <button v-else class="send-btn" :disabled="!input.trim()" @click="sendMessage">发送</button>
+      </div>
+    </template>
+
+    <!-- ============ Settings page ============ -->
+    <div v-else class="settings-page">
+      <div class="settings-scroll">
+        <div class="settings-shell">
+          <!-- Page heading -->
+          <div class="brand-head">
+            <button
+              class="brand-icon back"
+              type="button"
+              @click="backToChat"
+              aria-label="返回对话"
+              title="返回对话"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+            </button>
+            <div>
+              <h2 class="brand-title">模型配置</h2>
+              <p class="brand-sub">配置调用的大模型服务，用于 AI 助手对话与日报生成。</p>
+            </div>
+          </div>
+
+            <form class="config-card" @submit.prevent="saveConfig">
+              <div class="card-section">
+                <div class="field">
+                  <label class="field-label" for="ai-key">API Key</label>
+                  <input
+                    id="ai-key"
+                    class="field-input mono"
+                    type="password"
+                    autocomplete="off"
+                    spellcheck="false"
+                    v-model="draftKey"
+                    placeholder="sk-…"
+                  />
+                  <div class="field-hint" :class="{ tip: draftKey }">
+                    {{ draftKey ? '密钥仅保存在本机，不会上传。' : '未填写时将仅使用内置规则生成简单结果。' }}
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label class="field-label" for="ai-endpoint">请求地址</label>
+                  <input
+                    id="ai-endpoint"
+                    class="field-input mono"
+                    type="text"
+                    spellcheck="false"
+                    v-model="draftEndpoint"
+                    placeholder="https://api.deepseek.com/v1"
+                  />
+                  <div class="field-hint">兼容 OpenAI 格式，通常以 /v1 结尾（DeepSeek、OpenAI、Ollama 等）。</div>
+                </div>
+
+                <div class="field">
+                  <label class="field-label" for="ai-model">模型</label>
+                  <input
+                    id="ai-model"
+                    class="field-input mono"
+                    type="text"
+                    spellcheck="false"
+                    v-model="draftModel"
+                    placeholder="deepseek-chat / gpt-4o-mini …"
+                  />
+                  <div class="field-hint">填写所配置端点上可用的模型名称，例如 deepseek-chat、gpt-4o-mini。</div>
+                </div>
+              </div>
+
+              <div class="card-divider"></div>
+
+              <div class="toggle-row">
+                <div class="toggle-text">
+                  <span class="toggle-title">流式输出</span>
+                  <span class="toggle-desc">逐字显示回复，体验更流畅；关闭则等待完整结果后一次性展示。</span>
+                </div>
+                <button
+                  type="button"
+                  class="switch"
+                  :class="{ on: draftStreaming }"
+                  :aria-pressed="draftStreaming"
+                  @click="draftStreaming = !draftStreaming"
+                >
+                  <span class="switch-knob"></span>
+                </button>
+              </div>
+
+              <div class="card-actions">
+                <button type="button" class="btn-secondary" @click="backToChat">取消</button>
+                <button type="submit" class="btn-primary">保存配置</button>
+              </div>
+            </form>
+          </div>
+        </div>
     </div>
   </div>
 </template>
@@ -362,69 +429,164 @@ const currentTypingMsg = computed(() =>
 .tool-btn:hover:not(:disabled) { color: var(--primary-color); border-color: var(--primary-color); }
 .tool-btn:disabled { opacity: .6; cursor: not-allowed; }
 .tool-btn.icon { padding: 6px; }
-.tool-btn.icon.settingsOn,
-.tool-btn.settingsOn { background: var(--primary-light); color: var(--primary-color); border-color: transparent; }
 .toolbar-actions { display: flex; gap: 6px; }
 .tool-btn:disabled { cursor: not-allowed; opacity: .6; }
 
-/* Settings panel */
-.config-panel {
-  background: var(--bg-sidebar);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 14px 16px;
-  margin-top: 10px;
+/* Settings page: single full-width content column */
+.settings-page {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
-.config-row {
+.settings-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 4px 28px;
+}
+.settings-shell { width: 100%; padding-bottom: 4px; }
+
+/* Heading with icon (back button) + title + subtitle */
+.brand-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 4px 18px;
+}
+.brand-icon.back {
+  flex-shrink: 0;
+  width: 38px; height: 38px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+  padding: 0;
+  background: var(--primary-light);
+  color: var(--primary-color);
+  border: 1px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+  cursor: pointer;
+  transition: all .18s ease;
+}
+.brand-icon.back svg { transition: transform .18s ease; }
+.brand-icon.back:hover { background: var(--primary-color); color: #fff; box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 30%, transparent); }
+.brand-icon.back:hover svg { transform: translateX(-2px); }
+.brand-title { margin: 0; font-size: 19px; font-weight: 700; color: var(--text-main); line-height: 1.3; }
+.brand-sub { margin: 3px 0 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.55; }
+
+/* Form card */
+.config-card {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+}
+.card-section { display: flex; flex-direction: column; gap: 16px; }
+
+/* Field stack */
+.field { display: flex; flex-direction: column; }
+.field-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 6px;
+}
+.field-input {
+  width: 100%;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--text-main);
+  outline: none;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.field-input.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+.field-input::placeholder { color: var(--text-muted); }
+.field-input:focus {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 16%, transparent);
+}
+.field-hint {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.field-hint:empty { display: none; }
+.field-hint.tip { color: var(--text-muted); }
+
+/* Divider */
+.card-divider { height: 1px; background: var(--border-color); margin: 20px 0; }
+
+/* Toggle row */
+.toggle-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
 }
-.config-label {
-  font-size: 13px;
-  color: var(--text-main);
-  font-weight: 500;
+.toggle-text { display: flex; flex-direction: column; gap: 3px; }
+.toggle-title { font-size: 13px; font-weight: 600; color: var(--text-main); }
+.toggle-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+.switch {
   flex-shrink: 0;
-  min-width: 140px;
+  width: 44px; height: 24px;
+  background: var(--border-color);
+  border: none;
+  border-radius: 13px;
+  position: relative;
+  cursor: pointer;
+  transition: background-color .2s ease;
+  padding: 0;
 }
-.config-label .hint { font-size: 11px; color: var(--text-muted); font-style: normal; display: block; margin-top: 2px; }
-.config-input {
-  flex: 1;
+.switch.on { background: var(--primary-color); }
+.switch-knob {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 18px; height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,.22);
+  transition: transform .2s ease;
+}
+.switch.on .switch-knob { transform: translateX(20px); }
+
+/* Actions */
+.card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-color);
+}
+.btn-secondary {
   background: var(--bg-main);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 7px 10px;
-  font-size: 12.5px;
-  color: var(--text-main);
-  outline: none;
-  transition: border-color .18s ease;
+  border-radius: 9px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all .18s ease;
 }
-.config-input:focus { border-color: var(--primary-color); }
-.toggle-switch {
-  width: 42px; height: 23px; background: var(--border-color); border-radius: 12px;
-  position: relative; cursor: pointer; transition: background-color .2s ease; flex-shrink: 0;
+.btn-secondary:hover { color: var(--primary-color); border-color: var(--primary-color); }
+.btn-primary {
+  background: var(--primary-color);
+  color: #fff;
+  border: none;
+  border-radius: 9px;
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .18s ease, box-shadow .18s ease;
 }
-.toggle-switch.active { background-color: var(--primary-color); }
-.toggle-knob {
-  width: 17px; height: 17px; background: #fff; border-radius: 50%; position: absolute;
-  top: 3px; left: 3px; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .2s ease;
-}
-.toggle-switch.active .toggle-knob { transform: translateX(19px); }
-.config-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.config-save {
-  background: var(--primary-color); color: #fff; border: none; padding: 6px 18px; border-radius: 8px;
-  font-size: 13px; cursor: pointer;
-}
-.config-cancel {
-  background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary);
-  padding: 6px 16px; border-radius: 8px; font-size: 13px; cursor: pointer;
-}
-.settings-fade-enter-active, .settings-fade-leave-active { transition: opacity .18s ease, transform .18s ease; }
-.settings-fade-enter-from, .settings-fade-leave-to { opacity: 0; transform: translateY(-4px); }
+.btn-primary:hover { opacity: .9; box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-color) 32%, transparent); }
 
 /* Scroll + messages */
 .chat-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 6px 12px 4px; }
