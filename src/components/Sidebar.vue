@@ -58,7 +58,7 @@ const emit = defineEmits<{
       </div>
       <div class="menu-item" :class="{active: activeCategory === 'ai-chat'}" @click="emit('update:activeCategory', 'ai-chat')">
         <div class="left">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="3" width="16" height="18" rx="3"></rect><path d="M9 8h6M9 12h6M9 16h3"></path><circle cx="9" cy="8" r="1" fill="currentColor" stroke="none"></circle></svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="9" width="16" height="11" rx="3"></rect><line x1="9" y1="9" x2="9" y2="5.5"></line><line x1="15" y1="9" x2="15" y2="5.5"></line><circle cx="9" cy="4" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="15" cy="4" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="9" cy="14.5" r="1.3" fill="currentColor" stroke="none"></circle><circle cx="15" cy="14.5" r="1.3" fill="currentColor" stroke="none"></circle></svg>
           AI 助手
         </div>
       </div>

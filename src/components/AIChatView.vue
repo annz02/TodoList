@@ -25,7 +25,6 @@ const input = ref('');
 const isWaiting = ref(false);
 const abortCtrl = ref<AbortController | null>(null);
 const isReportRunning = ref(false);
-const copySuccess = ref(false);
 
 interface LocalMsg {
   id: number;
@@ -174,22 +173,20 @@ const generateDailyReport = async () => {
   }
 };
 
-// ---------- Misc ----------
-const resetConversation = () => {
-  abortCtrl.value?.abort();
-  abortCtrl.value = null;
-  isWaiting.value = false;
-  messages.value = [{ id: idSeq++, role: 'assistant', content: helpText }];
-};
+// ---------- Per-message copy ----------
+// Id of the message whose copy check-mark is currently shown.
+const copiedMsgId = ref<number | null>(null);
 
-const copyResult = async () => {
-  if (isWaiting.value) return;
-  const textToCopy = lastAssistant()?.content || '';
-  if (!textToCopy) return;
+const copyMessage = async (msg: LocalMsg) => {
+  if (isWaiting.value && msg.id === currentTypingMsg.value) return;
+  const text = msg.content.trim();
+  if (!text) return;
   try {
-    await navigator.clipboard.writeText(textToCopy);
-    copySuccess.value = true;
-    setTimeout(() => { copySuccess.value = false; }, 1800);
+    await navigator.clipboard.writeText(text);
+    copiedMsgId.value = msg.id;
+    setTimeout(() => {
+      if (copiedMsgId.value === msg.id) copiedMsgId.value = null;
+    }, 1800);
   } catch (e) {
     console.error('copy failed', e);
   }
@@ -235,13 +232,6 @@ const currentTypingMsg = computed(() =>
       </button>
 
       <div class="toolbar-actions">
-        <button class="tool-btn icon" title="重置会话" @click="resetConversation">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
-        </button>
-        <button class="tool-btn icon" title="复制最后回复" :disabled="isWaiting" @click="copyResult">
-          <svg v-if="!copySuccess" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-        </button>
         <button
           class="tool-btn icon"
           :class="{ settingsOn: showSettings }"
@@ -286,12 +276,11 @@ const currentTypingMsg = computed(() =>
       <div class="chat-messages">
         <div v-for="msg in messages" :key="msg.id" class="msg-row" :class="msg.role">
           <div class="avatar" :class="msg.role">
-            <svg v-if="msg.role === 'assistant'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="3"></rect><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line><path d="M9 15h6"></path></svg>
+            <svg v-if="msg.role === 'assistant'" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="9" width="16" height="11" rx="3"></rect><line x1="9" y1="9" x2="9" y2="5.5"></line><line x1="15" y1="9" x2="15" y2="5.5"></line><circle cx="9" cy="4" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="15" cy="4" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="9" cy="14.5" r="1.3" fill="currentColor" stroke="none"></circle><circle cx="15" cy="14.5" r="1.3" fill="currentColor" stroke="none"></circle></svg>
             <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
           </div>
           <div class="bubble" :class="msg.role">
             <template v-if="msg.role === 'assistant'">
-              <!-- eslint-disable-next-line vue/no-v-html -->
               <div class="md-content" v-html="renderMarkdown(msg.content)"></div>
               <span
                 v-if="isWaiting && msg.id === currentTypingMsg && msg.content === ''"
@@ -299,6 +288,16 @@ const currentTypingMsg = computed(() =>
               >
                 <i></i><i></i><i></i>
               </span>
+              <button
+                class="copy-msg-btn"
+                :class="{ copied: copiedMsgId === msg.id }"
+                :title="copiedMsgId === msg.id ? '已复制' : '复制'"
+                :disabled="msg.id === currentTypingMsg && msg.content === ''"
+                @click="copyMessage(msg)"
+              >
+                <svg v-if="copiedMsgId !== msg.id" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </button>
             </template>
             <pre v-else class="user-content">{{ msg.content }}</pre>
           </div>
@@ -442,9 +441,23 @@ const currentTypingMsg = computed(() =>
   max-width: 78%; padding: 10px 14px; border-radius: 12px; font-size: 13.5px; line-height: 1.65;
   word-break: break-word;
 }
-.bubble.assistant { background: var(--bg-sidebar); border: 1px solid var(--border-color); border-top-left-radius: 4px; }
+.bubble.assistant { background: var(--bg-sidebar); border: 1px solid var(--border-color); border-top-left-radius: 4px; position: relative; padding-right: 28px; }
 .bubble.user { background: var(--primary-color); color: #fff; border-top-right-radius: 4px; }
 .user-content { margin: 0; white-space: pre-wrap; font-family: inherit; font-size: 13.5px; color: inherit; }
+
+/* per-message copy button (always visible, top-right) */
+.copy-msg-btn {
+  position: absolute; top: 6px; right: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; padding: 0;
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  border: none; border-radius: 5px;
+  color: var(--text-secondary); cursor: pointer;
+  transition: color .15s ease, background-color .15s ease;
+}
+.copy-msg-btn:hover { color: var(--primary-color); background: color-mix(in srgb, var(--primary-color) 14%, transparent); }
+.copy-msg-btn.copied { color: var(--success-color, #16a34a); background: transparent; }
+.copy-msg-btn:disabled { color: var(--text-muted); cursor: not-allowed; }
 
 /* typing dots */
 .typing { display: inline-flex; gap: 4px; align-items: center; padding-top: 2px; }
