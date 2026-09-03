@@ -11,7 +11,7 @@ import { renderMarkdown, cleanDSMLTags } from '../utils/markdown';
 
 const props = defineProps<{ todos: Todo[] }>();
 const emit = defineEmits<{
-  (e: 'create-task', task: { title: string; category?: string; dueDate?: string; priority?: number }): void;
+  (e: 'create-task', task: { title: string; category?: string; dueDate?: string; startTime?: string; priority?: number }): void;
   (e: 'complete-task', taskTitleOrId: string): void;
   (e: 'delete-task', taskTitleOrId: string): void;
   (e: 'update-task', data: { taskTitleOrId: string; newTitle?: string; newCategory?: string; newDueDate?: string }): void;
@@ -40,6 +40,16 @@ const { sendChat } = useChatStream();
 const { search, fetchWebpage } = useWebSearch();
 const assistant = useAIAssistant(computed(() => props.todos));
 
+const getCurrentNowISO = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+};
+
 const LOCAL_TOOLS: ToolDefinition[] = [
   {
     type: 'function',
@@ -56,6 +66,10 @@ const LOCAL_TOOLS: ToolDefinition[] = [
           category: {
             type: 'string',
             description: '任务分类，如“工作”、“开发”、“学习”、“生活”等，可根据任务内容推断',
+          },
+          startTime: {
+            type: 'string',
+            description: '任务开始时间，格式为 YYYY-MM-DDTHH:mm（选填，若用户未明确说明，系统将自动默认当前时刻）',
           },
           dueDate: {
             type: 'string',
@@ -445,6 +459,7 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
           const title = (args.title || '').trim();
           const category = (args.category || '工作').trim();
           const dueDate = (args.dueDate || '').trim();
+          const startTime = (args.startTime || '').trim() || getCurrentNowISO();
           const step: AgentStep = {
             name: 'create_task',
             title: `创建待办任务：「${title || '新任务'}」`,
@@ -454,7 +469,12 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
           await scrollToBottom();
 
           if (title) {
-            emit('create-task', { title, category, dueDate: dueDate || undefined });
+            emit('create-task', {
+              title,
+              category,
+              startTime,
+              dueDate: dueDate || undefined,
+            });
             step.status = 'done';
             step.title = `已创建待办任务：「${title}」${category ? ` · ${category}` : ''}`;
             await scrollToBottom();
@@ -465,7 +485,7 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
               name: toolName,
               content: JSON.stringify({
                 success: true,
-                message: `待办任务「${title}」已成功创建并保存到 Todolist 中！分类：${category}。`,
+                message: `待办任务「${title}」已成功创建并保存到 Todolist 中！分类：${category}，开始时间：${startTime}。`,
               }),
             });
           } else {

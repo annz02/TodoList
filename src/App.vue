@@ -466,15 +466,26 @@ const handleInlineSave = (data: { title: string; category?: string; startTime: s
   showInlineCreate.value = false;
 };
 
+const getCurrentNowISO = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+};
+
 const handleCreateTaskFromAI = (data: { title: string; category?: string; dueDate?: string; startTime?: string; priority?: number }) => {
+  const finalStartTime = (data.startTime || '').trim() || getCurrentNowISO();
   const newTask: Todo = {
     id: Date.now().toString(),
     title: data.title,
     category: data.category || '工作',
     completed: false,
-    startTime: data.startTime || undefined,
+    startTime: finalStartTime,
     dueDate: data.dueDate || undefined,
-    timeText: formatTimeText(data.dueDate, data.startTime),
+    timeText: formatTimeText(data.dueDate, finalStartTime),
     priority: data.priority || undefined,
   };
   todos.value.push(newTask);
