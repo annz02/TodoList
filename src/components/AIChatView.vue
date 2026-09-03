@@ -968,7 +968,7 @@ const currentTypingMsg = computed(() =>
             <button
               class="tool-btn icon"
               :class="{ active: historyOpen }"
-              title="历史对话"
+              title="最近"
               :disabled="isWaiting || isReportRunning"
               @click="historyOpen = !historyOpen"
             >
@@ -977,13 +977,16 @@ const currentTypingMsg = computed(() =>
 
             <div v-if="historyOpen" class="hist-panel">
               <div class="hist-head">
-                <span>历史对话</span>
+                <span>最近</span>
                 <button
                   type="button"
                   class="hist-new"
                   :disabled="isWaiting || isReportRunning"
                   @click="startNewConversation"
-                >＋ 新建对话</button>
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                  <span>新聊天</span>
+                </button>
               </div>
               <div class="hist-list">
                 <div
@@ -993,7 +996,10 @@ const currentTypingMsg = computed(() =>
                   :class="{ active: c.id === conversations.activeId.value }"
                   :title="c.label"
                   @click="switchConversation(c.id)"
-                >{{ c.label }}</div>
+                >
+                  <span class="hist-item-title">{{ c.label }}</span>
+                  <span v-if="c.timeText" class="hist-item-time">{{ c.timeText }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1413,7 +1419,7 @@ const currentTypingMsg = computed(() =>
   top: calc(100% + 6px);
   right: 0;
   z-index: 50;
-  width: 250px;
+  width: 270px;
   max-height: 340px;
   display: flex;
   flex-direction: column;
@@ -1433,13 +1439,24 @@ const currentTypingMsg = computed(() =>
   color: var(--text-main);
 }
 .hist-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   background: transparent;
   border: none;
   color: var(--primary-color);
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  transition: all .15s ease;
+}
+.hist-new:hover {
+  background: var(--primary-light);
+}
+.hist-new svg {
+  flex-shrink: 0;
 }
 .hist-new:disabled { opacity: .5; cursor: not-allowed; }
 .hist-list {
@@ -1449,19 +1466,39 @@ const currentTypingMsg = computed(() =>
   gap: 2px;
 }
 .hist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   padding: 7px 10px;
   border-radius: 8px;
   font-size: 12.5px;
   color: var(--text-main);
   cursor: pointer;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  transition: all .15s ease;
 }
 .hist-item:hover { background: var(--primary-light); }
 .hist-item.active {
   background: color-mix(in srgb, var(--primary-color) 14%, transparent);
   font-weight: 600;
+}
+.hist-item-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hist-item-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.hist-item.active .hist-item-time {
+  color: var(--primary-color);
+  opacity: 0.9;
 }
 
 /* Settings page: single full-width content column */

@@ -34,6 +34,7 @@ export interface Conversation {
   id: string;
   label: string;
   messages: LocalMsg[];
+  updatedAt: number;
 }
 
 // Meta shown in the history list. Kept intentionally light (no messages) so
@@ -41,6 +42,8 @@ export interface Conversation {
 export interface ConversationMeta {
   id: string;
   label: string;
+  timeText: string;
+  updatedAt: number;
 }
 
 const helpText = `你好，我是 AI 助手 ✨
@@ -59,6 +62,41 @@ let idSeq = 1;
 const conversations = ref<Conversation[]>([]);
 const activeId = ref<string>('');
 
+function formatConvTime(ts?: number): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const now = new Date();
+
+  const isToday =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+
+  if (isToday) {
+    return `${hh}:${mm}`;
+  }
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday =
+    d.getFullYear() === yesterday.getFullYear() &&
+    d.getMonth() === yesterday.getMonth() &&
+    d.getDate() === yesterday.getDate();
+
+  if (isYesterday) {
+    return '昨天';
+  }
+
+  if (d.getFullYear() === now.getFullYear()) {
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  }
+
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+}
+
 const titleOf = (msgs: LocalMsg[]): string => {
   const firstUser = msgs.find((m) => m.role === 'user');
   const t = (firstUser?.content || '').trim().replace(/\s+/g, ' ').slice(0, 30);
@@ -74,6 +112,7 @@ function freshConversation(): void {
     id,
     label: '新对话',
     messages: [{ id: idSeq++, role: 'assistant', content: helpText }],
+    updatedAt: Date.now(),
   };
   conversations.value.push(conv);
   activeId.value = id;
@@ -98,11 +137,17 @@ export interface ConversationsStore {
   selectConversation: (id: string) => void;
   newConversation: () => void;
   refreshLabelIfUntitled: () => void;
+  touchActiveConversation: () => void;
 }
 
 export function useConversations(): ConversationsStore {
   const conversationsMeta = computed<ConversationMeta[]>(() =>
-    conversations.value.map((c) => ({ id: c.id, label: c.label })),
+    conversations.value.map((c) => ({
+      id: c.id,
+      label: c.label,
+      timeText: formatConvTime(c.updatedAt),
+      updatedAt: c.updatedAt,
+    })),
   );
 
   // The active conversation's message array. AIChatView keeps a reference to
@@ -121,6 +166,14 @@ export function useConversations(): ConversationsStore {
     if (!c) return;
     if (c.messages.some((m) => m.role === 'user') && c.label === '新对话') {
       c.label = titleOf(c.messages);
+    }
+    c.updatedAt = Date.now();
+  }
+
+  function touchActiveConversation(): void {
+    const c = activeConversation.value;
+    if (c) {
+      c.updatedAt = Date.now();
     }
   }
 
@@ -143,5 +196,6 @@ export function useConversations(): ConversationsStore {
     selectConversation,
     newConversation,
     refreshLabelIfUntitled,
+    touchActiveConversation,
   };
 }
