@@ -17,19 +17,35 @@ function inline(raw: string): string {
   if (!raw) return '';
   const seeds: string[] = [];
 
+  // Guards trust-worthy generated markup against the later escaping pass.
+  // We capture placeholders (\u0000) for each generated tag and reinsert them
+  // AFTER escapeHtml so the raw user/model text cannot inject markup while our
+  // own <strong>/<em>/<a>/<code> tags survive intact.
+  const protect = (fragment: string) => {
+    const idx = seeds.length;
+    seeds[idx] = fragment;
+    return `\u0000${idx}\u0000`;
+  };
+
   // Pull out inline code first so its content isn't run through formatting.
-  const withCode = raw.replace(/`([^`]+)`/g, (_m, code) => {
-    seeds.push(`<code class="chat-inline-code">${escapeHtml(code)}</code>`);
-    return `\u0000${seeds.length - 1}\u0000`;
-  });
+  const withCode = raw.replace(/`([^`]+)`/g, (_m, code) => protect(`<code class="chat-inline-code">${escapeHtml(code)}</code>`));
 
   let out = withCode
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/(^|[\s(>])\*([^*]+?)\*([\s.,;:!?<),]|$)/g, '$1<em>$2</em>$3')
-    .replace(/\[([^\]]+)\]\((?:<)?(https?:\/\/[^)\s>]+)(?:>)?\)/g, (_m, label, url) => {
-      const safe = escapeHtml(url.replace(/["'<>]/g, ''));
-      return `<a href="${safe}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`;
-    });
+    .replace(
+      /\*\*([^*]+)\*\*/g,
+      (_m, body) => protect(`<strong>${escapeHtml(body)}</strong>`),
+    )
+    .replace(
+      /(^|[\s(>])\*([^*]+?)\*([\s.,;:!?<),]|$)/g,
+      (_m, pre, body, post) => `${pre}${protect(`<em>${escapeHtml(body)}</em>`)}${post}`,
+    )
+    .replace(
+      /\[([^\]]+)\]\((?:<)?(https?:\/\/[^)\s>]+)(?:>)?\)/g,
+      (_m, label, url) => {
+        const safe = escapeHtml(url.replace(/["'<>]/g, ''));
+        return protect(`<a href="${safe}" target="_blank" rel="noopener noreferrer">${escapeHtml(label)}</a>`);
+      },
+    );
 
   out = escapeHtml(out);
   out = out.replace(/\u0000(\d+)\u0000/g, (_m, i) => seeds[Number(i)] || '');
