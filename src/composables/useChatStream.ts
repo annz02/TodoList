@@ -1,3 +1,5 @@
+import { invoke } from '@tauri-apps/api/core';
+
 export type ChatToolCall = {
   id: string;
   type: 'function';
@@ -34,6 +36,33 @@ type SSEDelta =
   | { type: 'tool_call'; delta: any };
 
 const decoder = new TextDecoder();
+
+/**
+ * Normalizes user-configured LLM endpoint into a canonical base URL.
+ * Automatically adds https:// (or http:// for localhost/IPs), strips trailing slashes,
+ * and strips redundant trailing `/chat/completions`.
+ */
+export function normalizeEndpoint(raw: string): string {
+  let s = (raw || '').trim();
+  if (!s) return 'https://api.deepseek.com/v1';
+
+  // If protocol missing, auto-prepend https:// (or http:// for localhost/ip)
+  if (!/^https?:\/\//i.test(s)) {
+    if (/^(localhost|127\.0\.0\.1)(:\d+)?/i.test(s)) {
+      s = `http://${s}`;
+    } else {
+      s = `https://${s}`;
+    }
+  }
+
+  // Strip trailing slashes
+  s = s.replace(/\/+$/, '');
+
+  // If user pasted full completions URL e.g. https://api.xxx.com/v1/chat/completions
+  s = s.replace(/\/chat\/completions\/?$/i, '');
+
+  return s;
+}
 
 /**
  * Reads an OpenAI/DeepSeek-compatible `stream:true` chat response body and
@@ -74,7 +103,9 @@ async function* streamSSE(reader: ReadableStreamDefaultReader<Uint8Array>): Asyn
 
 export function useChatStream() {
   /**
-   * Send a chat completion request with optional tool calling support.
+   * Send a chat completion request with dual-channel support:
+   * First tries standard Webview fetch; if blocked by CORS, CSP, or WebView proxy isolation,
+   * automatically falls back to native Tauri Rust HTTP client (bypasses all browser restrictions).
    */
   async function sendChat(
     opts: {
@@ -90,7 +121,8 @@ export function useChatStream() {
   ): Promise<ChatCompletionResult> {
     const { endpoint, apiKey, model, messages, tools, stream = true, signal, onChunk } = opts;
     const payloadMessages = messages.filter((m) => m.role !== 'system' || m.content.trim() !== '');
-    const base = trimEndpoint(endpoint);
+    const base = normalizeEndpoint(endpoint);
+    const targetUrl = `${base}/chat/completions`;
 
     const bodyPayload: Record<string, any> = {
       model,
@@ -104,20 +136,102 @@ export function useChatStream() {
       bodyPayload.tool_choice = 'auto';
     }
 
-    const response = await fetch(`${base}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(bodyPayload),
-      signal,
-    });
+    let response: Response | null = null;
+    let browserFetchFailed = false;
 
+    try {
+      response = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(bodyPayload),
+        signal,
+      });
+    } catch (fetchErr: any) {
+      // If user manually stopped/aborted generation, do not retry
+      if (signal?.aborted) {
+        throw fetchErr;
+      }
+      // Common browser WebView failures: Failed to fetch (CORS / CSP / WebView2 proxy loopback)
+      console.warn('Browser fetch failed, attempting Tauri Rust proxy fallback:', fetchErr);
+      browserFetchFailed = true;
+    }
+
+    // 1. Fallback channel: Tauri Rust backend native request (No CORS, No CSP, system proxy aware)
+    if (browserFetchFailed || !response) {
+      const proxyResult = await invoke<string>('ai_chat_proxy', {
+        url: targetUrl,
+        apiKey,
+        body: JSON.stringify(bodyPayload),
+      }).catch((proxyErr: any) => {
+        const errStr = String(proxyErr?.message || proxyErr || '');
+        throw new Error(`连接模型服务失败（浏览器与后端双通道均无法连通）：${errStr}`);
+      });
+
+      // Parse Rust proxy response
+      if (proxyResult.includes('data:')) {
+        let full = '';
+        const toolMap: Record<number, { id: string; name: string; args: string }> = {};
+        const lines = proxyResult.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+          const data = trimmed.slice(5).trim();
+          if (!data || data === '[DONE]') continue;
+          try {
+            const json = JSON.parse(data);
+            const choice = json?.choices?.[0];
+            const delta = choice?.delta;
+            if (delta?.content) {
+              full += delta.content;
+              onChunk(delta.content);
+            }
+            if (delta?.tool_calls && Array.isArray(delta.tool_calls)) {
+              for (const tc of delta.tool_calls) {
+                const idx = tc.index ?? 0;
+                if (!toolMap[idx]) toolMap[idx] = { id: '', name: '', args: '' };
+                if (tc.id) toolMap[idx].id = tc.id;
+                if (tc.function?.name) toolMap[idx].name += tc.function.name;
+                if (tc.function?.arguments) toolMap[idx].args += tc.function.arguments;
+              }
+            }
+          } catch {}
+        }
+
+        const toolIndices = Object.keys(toolMap).map(Number);
+        let toolCalls: ChatToolCall[] | undefined;
+        if (toolIndices.length > 0) {
+          toolCalls = toolIndices.map((i) => ({
+            id: toolMap[i].id || `call_${Date.now()}_${i}`,
+            type: 'function' as const,
+            function: {
+              name: toolMap[i].name,
+              arguments: toolMap[i].args,
+            },
+          }));
+        }
+        return { content: full, toolCalls };
+      } else {
+        // Plain JSON response
+        try {
+          const json = JSON.parse(proxyResult);
+          const choice = json?.choices?.[0];
+          const content = choice?.message?.content || '';
+          const toolCalls = choice?.message?.tool_calls;
+          if (content) onChunk(content);
+          return { content, toolCalls };
+        } catch {
+          if (proxyResult) onChunk(proxyResult);
+          return { content: proxyResult };
+        }
+      }
+    }
+
+    // 2. Primary channel: Standard browser streaming
     if (!response.ok) {
       let msg = '';
-      // Model providers may return JSON errors, but some gateways reply with
-      // plain text (or a body stating HTTP parse) for e.g. a 400. Read both.
       const bodyText = await response.text().catch(() => '');
       if (bodyText) {
         const trimmed = bodyText.replace(/^\s+/, '');
@@ -195,9 +309,4 @@ export function useChatStream() {
   }
 
   return { sendChat };
-}
-
-/** Helper so callers don't import trimEndpoint from the other composable. */
-function trimEndpoint(v: string): string {
-  return v.trim().replace(/\/+$/, '');
 }

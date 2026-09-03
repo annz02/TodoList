@@ -193,6 +193,7 @@ pub fn run() {
         get_git_commits, select_folder, open_url,
         search::web_search,
         search::fetch_webpage,
+        search::ai_chat_proxy,
         update::get_update_state,
         update::check_for_updates,
         update::install_update,

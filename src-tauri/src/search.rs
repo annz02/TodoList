@@ -590,3 +590,39 @@ pub async fn fetch_webpage(url: String) -> Result<String, String> {
         Ok(text)
     }
 }
+
+// ----------------------------------------------------
+// 7. AI Chat HTTP Proxy (bypasses browser CORS & CSP restrictions)
+// ----------------------------------------------------
+#[tauri::command]
+pub async fn ai_chat_proxy(url: String, api_key: String, body: String) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(90))
+        .danger_accept_invalid_certs(true)
+        .build()
+        .map_err(|e| format!("无法创建网络请求客户端: {}", e))?;
+
+    let mut req = client
+        .post(&url)
+        .header("Content-Type", "application/json");
+
+    let trimmed_key = api_key.trim();
+    if !trimmed_key.is_empty() {
+        req = req.header("Authorization", format!("Bearer {}", trimmed_key));
+    }
+
+    let resp = req
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| format!("后端网络连接失败: {}", e))?;
+
+    let status = resp.status();
+    let text = resp.text().await.map_err(|e| format!("读取回复失败: {}", e))?;
+
+    if !status.is_success() {
+        return Err(format!("HTTP {}: {}", status.as_u16(), text));
+    }
+
+    Ok(text)
+}
