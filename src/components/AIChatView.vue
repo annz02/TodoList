@@ -26,6 +26,7 @@ const {
   webSearch,
   searchEngine,
   tavilyApiKey,
+  bochaApiKey,
   setConnection,
   setModels,
   setActiveModel,
@@ -33,6 +34,7 @@ const {
   setWebSearch,
   setSearchEngine,
   setTavilyApiKey,
+  setBochaApiKey,
 } = useAIConfig();
 const { sendChat } = useChatStream();
 const { search, fetchWebpage } = useWebSearch();
@@ -247,6 +249,7 @@ const draftApiKey = ref(apiKey.value);
 const draftWebSearch = ref(webSearch.value);
 const draftSearchEngine = ref(searchEngine.value);
 const draftTavilyKey = ref(tavilyApiKey.value);
+const draftBochaKey = ref(bochaApiKey.value);
 // Editable model rows under that connection — one input per model name.
 let draftSeq = 0;
 const draftModels = ref<{ id: number; name: string }[]>([]);
@@ -616,9 +619,15 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
           tail.steps.push(step);
           await scrollToBottom();
 
+          const searchKey = searchEngine.value === 'bocha'
+            ? bochaApiKey.value
+            : searchEngine.value === 'tavily'
+              ? tavilyApiKey.value
+              : '';
+
           const results = await search(query, {
             engine: searchEngine.value,
-            api_key: tavilyApiKey.value,
+            api_key: searchKey,
           });
 
           if (!tail.sources) tail.sources = [];
@@ -862,6 +871,7 @@ const openSettings = () => {
   draftWebSearch.value = webSearch.value;
   draftSearchEngine.value = searchEngine.value;
   draftTavilyKey.value = tavilyApiKey.value;
+  draftBochaKey.value = bochaApiKey.value;
   draftModels.value = models.value.map((m) => ({ id: ++draftSeq, name: m }));
   modelPickerOpen.value = false;
   view.value = 'settings';
@@ -888,6 +898,7 @@ const handleSaveConfig = () => {
   setWebSearch(draftWebSearch.value);
   setSearchEngine(draftSearchEngine.value);
   setTavilyApiKey(draftTavilyKey.value);
+  setBochaApiKey(draftBochaKey.value);
   const names = draftModels.value
     .map((r) => r.name)
     .map((n) => n.trim())
@@ -1267,7 +1278,14 @@ const currentTypingMsg = computed(() =>
                     <input type="radio" value="builtin" v-model="draftSearchEngine" />
                     <div class="engine-radio-text">
                       <span class="engine-name">内置免费检索（推荐）</span>
-                      <span class="engine-sub">包含 Bing 搜索与实时气象中心，无需配置任何 API Key</span>
+                      <span class="engine-sub">包含通用检索、秒级 A 股实时行情与气象中心，无需配置任何 API Key</span>
+                    </div>
+                  </label>
+                  <label class="engine-radio-item" :class="{ active: draftSearchEngine === 'bocha' }">
+                    <input type="radio" value="bocha" v-model="draftSearchEngine" />
+                    <div class="engine-radio-text">
+                      <span class="engine-name">博查 AI 搜索（国内推荐）</span>
+                      <span class="engine-sub">国内专为大模型打造的联网搜索，免翻墙、A股与时政资讯极佳</span>
                     </div>
                   </label>
                   <label class="engine-radio-item" :class="{ active: draftSearchEngine === 'tavily' }">
@@ -1277,6 +1295,18 @@ const currentTypingMsg = computed(() =>
                       <span class="engine-sub">专为 AI 优化的高质量专业搜索服务（需填 Key）</span>
                     </div>
                   </label>
+                </div>
+
+                <div v-if="draftSearchEngine === 'bocha'" class="tavily-key-field">
+                  <label class="field-label" for="bocha-key">博查 API Key</label>
+                  <input
+                    id="bocha-key"
+                    class="field-input mono"
+                    type="password"
+                    v-model="draftBochaKey"
+                    placeholder="sk-…"
+                  />
+                  <div class="field-hint">可在 bochaai.com 免费获取；未填写或额度耗尽时自动回退到内置免费检索。</div>
                 </div>
 
                 <div v-if="draftSearchEngine === 'tavily'" class="tavily-key-field">

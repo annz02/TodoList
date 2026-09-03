@@ -14,6 +14,7 @@ const KEY_STREAMING = 'ai_chat_streaming';
 const KEY_WEB_SEARCH = 'ai_chat_web_search';
 const KEY_SEARCH_ENGINE = 'ai_chat_search_engine';
 const KEY_TAVILY_KEY = 'ai_chat_tavily_key';
+const KEY_BOCHA_KEY = 'ai_chat_bocha_key';
 
 
 const loadBool = (key: string, fallback: boolean): boolean => {
@@ -76,6 +77,7 @@ const streaming = ref(loadBool(KEY_STREAMING, true));
 const webSearch = ref(loadBool(KEY_WEB_SEARCH, true));
 const searchEngine = ref(localStorage.getItem(KEY_SEARCH_ENGINE) || 'builtin');
 const tavilyApiKey = ref(localStorage.getItem(KEY_TAVILY_KEY) || '');
+const bochaApiKey = ref(localStorage.getItem(KEY_BOCHA_KEY) || '');
 
 const persist = () => {
   localStorage.setItem(
@@ -112,6 +114,7 @@ export interface AIConfigStore {
   webSearch: Ref<boolean>;
   searchEngine: Ref<string>;
   tavilyApiKey: Ref<string>;
+  bochaApiKey: Ref<string>;
   setConnection: (ep: string, key: string) => void;
   setModels: (names: string[], active: string | null) => void;
   addModel: (name: string) => void;
@@ -121,6 +124,7 @@ export interface AIConfigStore {
   setWebSearch: (v: boolean) => void;
   setSearchEngine: (v: string) => void;
   setTavilyApiKey: (v: string) => void;
+  setBochaApiKey: (v: string) => void;
 }
 
 export function useAIConfig(): AIConfigStore {
@@ -188,6 +192,11 @@ export function useAIConfig(): AIConfigStore {
     localStorage.setItem(KEY_TAVILY_KEY, v.trim());
   };
 
+  const setBochaApiKey = (v: string) => {
+    bochaApiKey.value = v.trim();
+    localStorage.setItem(KEY_BOCHA_KEY, v.trim());
+  };
+
   return {
     endpoint,
     apiKey,
@@ -199,6 +208,7 @@ export function useAIConfig(): AIConfigStore {
     webSearch,
     searchEngine,
     tavilyApiKey,
+    bochaApiKey,
     setConnection,
     setModels,
     addModel,
@@ -208,5 +218,6 @@ export function useAIConfig(): AIConfigStore {
     setWebSearch,
     setSearchEngine,
     setTavilyApiKey,
+    setBochaApiKey,
   };
 }

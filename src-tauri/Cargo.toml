@@ -29,6 +29,7 @@ tauri-plugin-updater = { version = "2", features = ["rustls-tls"], default-featu
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 semver = "1"
 rfd = "0.15"
+encoding_rs = "0.8"
 
 [profile.release]
 opt-level = "s"
