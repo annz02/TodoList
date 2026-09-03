@@ -141,11 +141,18 @@ fn select_folder() -> Option<String> {
 
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
+    // Only allow http/https links. This keeps the raw URL out of shell context
+    // (cmd /c start, xdg-open, open) and prevents opening local files/危 schemes.
+    let lower = url.trim().to_ascii_lowercase();
+    if !(lower.starts_with("http://") || lower.starts_with("https://")) {
+        return Err("仅允许打开 http/https 链接".into());
+    }
+
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("cmd")
             .creation_flags(CREATE_NO_WINDOW)
-            .args(&["/c", "start", "", &url])
+            .args(["/c", "start", "", &url])
             .spawn()
             .map_err(|e| e.to_string())?;
         Ok(())

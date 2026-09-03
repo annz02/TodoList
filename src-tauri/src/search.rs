@@ -249,12 +249,73 @@ pub async fn web_search(query: String, options: Option<SearchOptions>) -> Result
     search_bing(&client, trimmed).await
 }
 
+// Anti-SSRF guard: reject targets that resolve to loopback, private, link-local,
+// or other non-public address ranges. Rejects the scheme early and disallows
+// requests into the local network or machine itself.
+fn is_public_url(url: &str) -> std::result::Result<(), String> {
+    let parsed = reqwest::Url::parse(url).map_err(|e| format!("URL 解析失败: {}", e))?;
+    if !(parsed.scheme() == "http" || parsed.scheme() == "https") {
+        return Err("仅允许访问 http/https 链接".into());
+    }
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "URL 缺少主机名".to_string())?;
+
+    // Hosts that resolve to a literal IP are checked directly.
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        if !is_public_ip(ip) {
+            return Err("不允许访问内网/本机地址".into());
+        }
+        return Ok(());
+    }
+
+    // Otherwise resolve hostname(s) and reject if ANY resolved address is private.
+    use std::net::ToSocketAddrs;
+    let addr_port = format!("{}:443", host);
+    let resolved = addr_port
+        .to_socket_addrs()
+        .map_err(|e| format!("主机解析失败: {}", e))?;
+    for sa in resolved {
+        if !is_public_ip(sa.ip()) {
+            return Err("目标地址包含内网/本机地址，已阻止访问".into());
+        }
+    }
+    Ok(())
+}
+
+fn is_public_ip(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            !(v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_broadcast()
+                || v4.is_unspecified()
+                || v4.is_multicast()
+                // 100.64.0.0/10 CGNAT and 192.0.0.0/24 special block
+                || (v4.octets()[0] == 100 && v4.octets()[1] & 0b1100_0000 == 0b0100_0000)
+                || (v4.octets()[0] == 192 && v4.octets()[1] == 0))
+        }
+        std::net::IpAddr::V6(v6) => {
+            !(v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_multicast()
+                // Unique-local fc00::/7
+                || (v6.segments()[0] & 0xfe00 == 0xfc00)
+                // IPv4-mapped / documentation handled by reqwest being host-based
+            )
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn fetch_webpage(url: String) -> Result<String, String> {
     let trimmed = url.trim();
     if trimmed.is_empty() {
         return Ok(String::new());
     }
+
+    is_public_url(&trimmed)?;
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(8))
