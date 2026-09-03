@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { Todo } from '../types';
 import { useAIConfig } from '../composables/useAIConfig';
+import { useConversations, type AgentStep, type LocalMsg } from '../composables/useConversations';
 import { useAIAssistant } from '../composables/useAIAssistant';
 import { useChatStream, type ChatMessage, type ToolDefinition } from '../composables/useChatStream';
-import { useWebSearch, type SearchResult } from '../composables/useWebSearch';
+import { useWebSearch } from '../composables/useWebSearch';
 import { renderMarkdown, cleanDSMLTags } from '../utils/markdown';
 
 const props = defineProps<{ todos: Todo[] }>();
@@ -36,12 +37,6 @@ const {
 const { sendChat } = useChatStream();
 const { search, fetchWebpage } = useWebSearch();
 const assistant = useAIAssistant(computed(() => props.todos));
-
-export interface AgentStep {
-  name: string;
-  title: string;
-  status: 'running' | 'done' | 'error';
-}
 
 const LOCAL_TOOLS: ToolDefinition[] = [
   {
@@ -289,15 +284,15 @@ const toggleWebSearch = () => {
   setWebSearch(!webSearch.value);
 };
 
-interface LocalMsg {
-  id: number;
-  role: 'user' | 'assistant';
-  content: string;
-  sources?: SearchResult[];
-  steps?: AgentStep[];
-}
-let idSeq = 1;
-const messages = ref<LocalMsg[]>([]);
+// Conversation roster lives in the module-singleton useConversations store so
+// it survives navigating away from the ai-chat page (component unmount) and back.
+const conversations = useConversations();
+// Alias to the active conversation's messages array. Read/write is unchanged:
+// the store exposes the exact array of the currently active conversation and
+// mutations (push, element field writes) trigger the v-for below.
+const messages = conversations.messages;
+const nextMessageId = conversations.nextMessageId;
+const refreshConversationTitle = conversations.refreshLabelIfUntitled;
 const scroller = ref<HTMLElement | null>(null);
 const textareaEl = ref<HTMLTextAreaElement | null>(null);
 
@@ -310,29 +305,32 @@ const autoGrowTextarea = () => {
   el.scrollTop = 0;
 };
 
-const helpText = `你好，我是 AI 助手 ✨
-
-我可以：
-- **自由对话**：在下方输入框提问，与我进行多轮对话。
-- **一键生成工作日报**：点击顶部「今日工作日报」，我会结合你今天的任务与 Git 提交记录为你生成日报。
-
-在下方输入框下方的模型选择器中选择并配置模型（右上角 ⚙️ 也可进入模型配置）后可获得最佳体验；未配置 API Key 时会使用内置规则生成简单结果。`;
-
-if (messages.value.length === 0) {
-  messages.value.push({ id: idSeq++, role: 'assistant', content: helpText });
-}
-
 const scrollToBottom = async () => {
   await nextTick();
   scroller.value?.scrollTo({ top: scroller.value.scrollHeight });
 };
 
+// Clear per-conversation transient UI when switching to another conversation.
+watch(
+  () => conversations.activeId.value,
+  () => {
+    openSourceMsgIds.value = [];
+    copiedMsgId.value = null;
+    input.value = '';
+  },
+);
+
 const lastAssistant = (): LocalMsg => messages.value[messages.value.length - 1];
 
 /**
  * Antigravity Agentic Loop: executes multi-turn tool calling autonomously.
+ *
+ * `extraContext` (optional) is injected into the outgoing API conversation right
+ * after the system prompt, but is NOT shown in the chat UI. It lets the daily
+ * report feed the structured task/data prompt to the model while keeping the
+ * visible user bubble short.
  */
-async function streamInto(tail: LocalMsg): Promise<boolean> {
+async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Promise<boolean> {
   const ctrl = new AbortController();
   abortCtrl.value = ctrl;
   isWaiting.value = true;
@@ -343,11 +341,12 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
   const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 星期${['日', '一', '二', '三', '四', '五', '六'][now.getDay()]}`;
 
   const system = apiKey.value.trim()
-    ? `你是 Todolist 内置的智能助手（基于 Antigravity Agent 智能体架构）。当前时间：${dateStr}。\n你具备全套待办管理与网络工具：\n- create_task: 新建待办；\n- update_task: 修改已有待办的标题、分类、截止时间；\n- delete_task: 删除某项待办；\n- complete_task: 标记待办完成；\n- get_today_tasks: 查询今日任务进度；\n- web_search / fetch_webpage: 网络检索与网页精读。\n【操作准则】：当用户提出新建、修改、删除或完成待办的诉求时，请直接调用对应工具执行。回答请准确、专业、友好并使用中文。`
-    : '你是 Todolist 内置的 AI 助手。当前未配置大模型 API，仅能根据内置规则生成工作日报。请友好提醒用户在下方模型选择器中选择并配置模型。';
+    ? `你是 Todolist 内置的智能助手（基于 Antigravity Agent 智能体架构）。当前时间：${dateStr}。\n你具备全套待办管理与网络工具：\n- create_task: 新建待办；\n- update_task: 修改已有待办的标题、分类、截止时间；\n- delete_task: 删除某项待办；\n- complete_task: 标记待办完成；\n- get_today_tasks: 查询今日任务进度；\n- web_search / fetch_webpage: 网络检索与网页精读。\n【操作准则】：当用户提出新建、修改、删除或完成待办的诉求时，请直接调用对应工具执行。回答请准确、专业、友好并使用中文。\n【排版要求（务必遵守）】：回答务必注重条理与可读性。\n1) 如果内容包含多个方面或步骤，先用 **加粗小节标题**（如 **一、要点分析**、**二、建议**）分节；\n2) 并列要点一律用行首符号 - 或有序 1. 2. 列表逐条列出，不要把它们吞进同一句话里；\n3) 段落与条目之间用空行分隔，不要输出连续一整段拥挤的文字墙；\n4) 不确定或有取舍时给出简短小结；内容简短时 1-3 条即可，不必强行堆砌。`
+    : '你是 Todolist 内置的 AI 助手。当前未配置大模型 API，仅能根据内置规则生成工作日报。请友好提醒用户在下方模型选择器中选择并配置模型；如果你在生成日报，请按有结构、分段、分点的条理输出。';
 
   const conversation: ChatMessage[] = [
     { role: 'system', content: system },
+    ...extraContext,
     ...messages.value.slice(0, -1).map((m) => ({
       role: m.role as 'system' | 'user' | 'assistant' | 'tool',
       content: m.content,
@@ -728,8 +727,9 @@ const sendMessage = async () => {
 
   input.value = '';
   autoGrowTextarea();
-  messages.value.push({ id: idSeq++, role: 'user', content: text });
-  const tail: LocalMsg = { id: idSeq++, role: 'assistant', content: '', sources: [], steps: [] };
+  messages.value.push({ id: nextMessageId(), role: 'user', content: text });
+  refreshConversationTitle();
+  const tail: LocalMsg = { id: nextMessageId(), role: 'assistant', content: '', sources: [], steps: [] };
   messages.value.push(tail);
   await scrollToBottom();
 
@@ -761,12 +761,15 @@ const generateDailyReport = async () => {
     await scrollToBottom();
 
     if (apiKey.value.trim()) {
-      // Ask the model using the structured data.
-      messages.value.push({ id: idSeq++, role: 'user', content: assistant.buildDataPrompt() });
-      const tail = { id: idSeq++, role: 'assistant' as const, content: '' };
+      // Ask the model using the structured data. The detailed task/commit data
+      // prompt is fed to the model via extraContext (not shown to avoid a wall of
+      // internal text); the visible user bubble stays short.
+      messages.value.push({ id: nextMessageId(), role: 'user', content: '请帮我生成今天的 AI 工作日报' });
+      refreshConversationTitle();
+      const tail = { id: nextMessageId(), role: 'assistant' as const, content: '' };
       messages.value.push(tail);
       await scrollToBottom();
-      const ok = await streamInto(tail);
+      const ok = await streamInto(tail, [{ role: 'user', content: assistant.buildDataPrompt() }]);
       if (!ok) {
         // Fall back to built-in so the user still gets something.
         tail.content = `\n\n> 在线生成失败，下面是内置规则生成的日报：\n\n` + assistant.builtInSummary();
@@ -777,8 +780,8 @@ const generateDailyReport = async () => {
 
     // No key => offline built-in summary.
     const summary = assistant.builtInSummary();
-    messages.value.push({ id: idSeq++, role: 'user', content: '请为我生成今天的 AI 工作日报' });
-    messages.value.push({ id: idSeq++, role: 'assistant', content: `📋 已根据内置规则为您生成今日工作日报：\n\n${summary}` });
+    messages.value.push({ id: nextMessageId(), role: 'user', content: '请为我生成今天的 AI 工作日报' });
+    messages.value.push({ id: nextMessageId(), role: 'assistant', content: `📋 已根据内置规则为您生成今日工作日报：\n\n${summary}` });
     await scrollToBottom();
   } catch (err: any) {
     console.error('生成日报失败：', err);
@@ -804,6 +807,23 @@ const copyMessage = async (msg: LocalMsg) => {
   } catch (e) {
     console.error('copy failed', e);
   }
+};
+
+// ---------- Conversation history ----------
+const historyOpen = ref(false);
+
+const startNewConversation = () => {
+  if (isWaiting.value || isReportRunning.value) return;
+  conversations.newConversation();
+  historyOpen.value = false;
+  nextTick(() => scrollToBottom());
+};
+
+const switchConversation = (id: string) => {
+  if (isWaiting.value || isReportRunning.value) return;
+  conversations.selectConversation(id);
+  historyOpen.value = false;
+  nextTick(() => scrollToBottom());
 };
 
 // ---------- Model manager settings ----------
@@ -886,6 +906,41 @@ const currentTypingMsg = computed(() =>
         </button>
 
         <div class="toolbar-actions">
+          <!-- Conversation history -->
+          <div class="hist-wrap">
+            <button
+              class="tool-btn icon"
+              :class="{ active: historyOpen }"
+              title="历史对话"
+              :disabled="isWaiting || isReportRunning"
+              @click="historyOpen = !historyOpen"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+            </button>
+
+            <div v-if="historyOpen" class="hist-panel">
+              <div class="hist-head">
+                <span>历史对话</span>
+                <button
+                  type="button"
+                  class="hist-new"
+                  :disabled="isWaiting || isReportRunning"
+                  @click="startNewConversation"
+                >＋ 新建对话</button>
+              </div>
+              <div class="hist-list">
+                <div
+                  v-for="c in conversations.conversationsMeta.value"
+                  :key="c.id"
+                  class="hist-item"
+                  :class="{ active: c.id === conversations.activeId.value }"
+                  :title="c.label"
+                  @click="switchConversation(c.id)"
+                >{{ c.label }}</div>
+              </div>
+            </div>
+          </div>
+
           <button class="tool-btn icon" title="模型配置" @click="openSettings">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
           </button>
@@ -1269,6 +1324,69 @@ const currentTypingMsg = computed(() =>
 .tool-btn.icon { padding: 6px; }
 .toolbar-actions { display: flex; gap: 6px; }
 .tool-btn:disabled { cursor: not-allowed; opacity: .6; }
+
+/* Conversation history popover */
+.hist-wrap { position: relative; }
+.hist-wrap .tool-btn.active {
+  color: var(--primary-color);
+  border-color: var(--primary-color);
+  background: var(--primary-light);
+}
+.hist-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  width: 250px;
+  max-height: 340px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .16);
+}
+.hist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.hist-new {
+  background: transparent;
+  border: none;
+  color: var(--primary-color);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.hist-new:disabled { opacity: .5; cursor: not-allowed; }
+.hist-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hist-item {
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--text-main);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hist-item:hover { background: var(--primary-light); }
+.hist-item.active {
+  background: color-mix(in srgb, var(--primary-color) 14%, transparent);
+  font-weight: 600;
+}
 
 /* Settings page: single full-width content column */
 .settings-page {
