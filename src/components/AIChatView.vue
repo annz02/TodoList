@@ -6,7 +6,7 @@ import { useAIConfig } from '../composables/useAIConfig';
 import { useAIAssistant } from '../composables/useAIAssistant';
 import { useChatStream, type ChatMessage, type ToolDefinition } from '../composables/useChatStream';
 import { useWebSearch, type SearchResult } from '../composables/useWebSearch';
-import { renderMarkdown } from '../utils/markdown';
+import { renderMarkdown, cleanDSMLTags } from '../utils/markdown';
 
 const props = defineProps<{ todos: Todo[] }>();
 
@@ -84,6 +84,32 @@ const AGENT_TOOLS: ToolDefinition[] = [
     },
   },
 ];
+
+function parseDSMLToolCalls(text: string) {
+  const calls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = [];
+  const invokeRegex = /<[|｜]DSML[|｜]invoke\s+name="([^"]+)">([\s\S]*?)<\/[|｜]DSML[|｜]invoke>/g;
+  let match: RegExpExecArray | null;
+  let idx = 0;
+  while ((match = invokeRegex.exec(text)) !== null) {
+    const name = match[1];
+    const body = match[2];
+    const paramRegex = /<[|｜]DSML[|｜]parameter\s+name="([^"]+)"[^>]*>([\s\S]*?)<\/[|｜]DSML[|｜]parameter>/g;
+    const args: Record<string, string> = {};
+    let pMatch: RegExpExecArray | null;
+    while ((pMatch = paramRegex.exec(body)) !== null) {
+      args[pMatch[1]] = pMatch[2].trim();
+    }
+    calls.push({
+      id: `call_dsml_${Date.now()}_${idx++}`,
+      type: 'function',
+      function: {
+        name,
+        arguments: JSON.stringify(args),
+      },
+    });
+  }
+  return calls;
+}
 
 
 // ---------------------------------------------------------------------------
@@ -198,149 +224,170 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
   ];
 
   try {
-    // 1. Initial request with tools
-    const tools = webSearch.value ? AGENT_TOOLS : undefined;
+    let toolTurn = 0;
+    const MAX_TOOL_TURNS = 2;
 
-    const firstResult = await sendChat({
-      endpoint: cfg.endpoint,
-      apiKey: cfg.apiKey,
-      model: cfg.model,
-      messages: conversation,
-      tools,
-      stream,
-      signal: ctrl.signal,
-      onChunk: (chunk) => {
-        tail.content += chunk;
-        scrollToBottom();
-      },
-    });
+    while (toolTurn < MAX_TOOL_TURNS) {
+      toolTurn++;
+      const tools = webSearch.value ? AGENT_TOOLS : undefined;
 
-    // If model answered directly without calling any tools, we're done!
-    if (!firstResult.toolCalls || firstResult.toolCalls.length === 0) {
-      if (!stream && firstResult.content) tail.content = firstResult.content;
-      if (stream && !tail.content) tail.content = firstResult.content || '（模型返回了空回复，请稍后重试）';
-      await scrollToBottom();
-      return true;
-    }
+      const result = await sendChat({
+        endpoint: cfg.endpoint,
+        apiKey: cfg.apiKey,
+        model: cfg.model,
+        messages: conversation,
+        tools,
+        stream,
+        signal: ctrl.signal,
+        onChunk: (chunk) => {
+          tail.content += chunk;
+          tail.content = cleanDSMLTags(tail.content);
+          scrollToBottom();
+        },
+      });
 
-    // Model requested tools:
-    conversation.push({
-      role: 'assistant',
-      content: firstResult.content || '',
-      tool_calls: firstResult.toolCalls,
-    });
-    tail.content = '';
-
-    for (const call of firstResult.toolCalls) {
-      if (ctrl.signal.aborted) break;
-      const toolName = call.function.name;
-      let args: any = {};
-      try {
-        args = JSON.parse(call.function.arguments || '{}');
-      } catch {
-        args = {};
-      }
-
-      if (!tail.steps) tail.steps = [];
-
-      if (toolName === 'web_search') {
-        const query = (args.query || '').trim();
-        const step: AgentStep = {
-          name: 'web_search',
-          title: `网络检索：${query || '实时信息'}`,
-          status: 'running',
-        };
-        tail.steps.push(step);
-        await scrollToBottom();
-
-        const results = await search(query, {
-          engine: searchEngine.value,
-          api_key: tavilyApiKey.value,
-        });
-
-        if (!tail.sources) tail.sources = [];
-        for (const r of results) {
-          if (!tail.sources.some((x) => x.link === r.link)) {
-            tail.sources.push(r);
-          }
+      // 检查是否有标准 API toolCalls，或内容中是否包含 DeepSeek DSML 标签
+      let toolCalls = result.toolCalls;
+      if ((!toolCalls || toolCalls.length === 0) && result.content && result.content.includes('DSML')) {
+        const dsmlCalls = parseDSMLToolCalls(result.content);
+        if (dsmlCalls.length > 0) {
+          toolCalls = dsmlCalls;
         }
-        step.status = 'done';
-        step.title = `网络检索完成：已获取 ${results.length} 条相关资讯`;
-        await scrollToBottom();
+      }
 
-        conversation.push({
-          role: 'tool',
-          tool_call_id: call.id,
-          name: toolName,
-          content: JSON.stringify(
-            results.map((r, i) => ({
-              index: i + 1,
-              title: r.title,
-              link: r.link,
-              snippet: r.snippet,
-              source: r.source,
-            })),
-          ),
-        });
-      } else if (toolName === 'fetch_webpage') {
-        const url = (args.url || '').trim();
-        const step: AgentStep = {
-          name: 'fetch_webpage',
-          title: `深入阅读网页：${url}`,
-          status: 'running',
-        };
-        tail.steps.push(step);
+      // 如果模型没有发起任何工具调用，说明已给出了直接回复！
+      if (!toolCalls || toolCalls.length === 0) {
+        if (!stream && result.content) tail.content = result.content;
+        if (stream && !tail.content) tail.content = result.content || '（模型返回了空回复，请稍后重试）';
+        tail.content = cleanDSMLTags(tail.content);
         await scrollToBottom();
+        return true;
+      }
 
-        const text = await fetchWebpage(url);
-        step.status = 'done';
-        step.title = `网页阅读完成 (${text.length} 字)`;
-        await scrollToBottom();
+      // 记录模型的工具调用意图
+      const cleanContent = cleanDSMLTags(result.content);
+      conversation.push({
+        role: 'assistant',
+        content: cleanContent || '',
+        tool_calls: toolCalls,
+      });
+      tail.content = '';
 
-        conversation.push({
-          role: 'tool',
-          tool_call_id: call.id,
-          name: toolName,
-          content: text || '（未能获取网页文本内容）',
-        });
-      } else if (toolName === 'get_today_tasks') {
-        const step: AgentStep = {
-          name: 'get_today_tasks',
-          title: `查询 Todolist 今日任务进度`,
-          status: 'running',
-        };
-        tail.steps.push(step);
-        await scrollToBottom();
+      for (const call of toolCalls) {
+        if (ctrl.signal.aborted) break;
+        const toolName = call.function.name;
+        let args: any = {};
+        try {
+          args = JSON.parse(call.function.arguments || '{}');
+        } catch {
+          args = {};
+        }
 
-        const st = assistant.stats.value;
-        const tasksInfo = {
-          total: st.todayTasks.length,
-          completed: st.completedToday.map((t) => t.title),
-          pending: st.pendingToday.map((t) => t.title),
-          completionRate: `${st.completionRate}%`,
-        };
-        step.status = 'done';
-        step.title = `已获取今日待办：共 ${st.todayTasks.length} 项（完成率 ${st.completionRate}%）`;
-        await scrollToBottom();
+        if (!tail.steps) tail.steps = [];
 
-        conversation.push({
-          role: 'tool',
-          tool_call_id: call.id,
-          name: toolName,
-          content: JSON.stringify(tasksInfo),
-        });
-      } else {
-        conversation.push({
-          role: 'tool',
-          tool_call_id: call.id,
-          name: toolName,
-          content: JSON.stringify({ error: `未知的工具: ${toolName}` }),
-        });
+        if (toolName === 'web_search') {
+          const query = (args.query || '').trim();
+          const step: AgentStep = {
+            name: 'web_search',
+            title: `网络检索：${query || '实时信息'}`,
+            status: 'running',
+          };
+          tail.steps.push(step);
+          await scrollToBottom();
+
+          const results = await search(query, {
+            engine: searchEngine.value,
+            api_key: tavilyApiKey.value,
+          });
+
+          if (!tail.sources) tail.sources = [];
+          for (const r of results) {
+            if (!tail.sources.some((x) => x.link === r.link)) {
+              tail.sources.push(r);
+            }
+          }
+          step.status = 'done';
+          step.title = `网络检索完成：已获取 ${results.length} 条相关资讯`;
+          await scrollToBottom();
+
+          conversation.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            name: toolName,
+            content: JSON.stringify(
+              results.map((r, i) => ({
+                index: i + 1,
+                title: r.title,
+                link: r.link,
+                snippet: r.snippet,
+                source: r.source,
+              })),
+            ),
+          });
+        } else if (toolName === 'fetch_webpage') {
+          const url = (args.url || '').trim();
+          const step: AgentStep = {
+            name: 'fetch_webpage',
+            title: `深入阅读网页：${url}`,
+            status: 'running',
+          };
+          tail.steps.push(step);
+          await scrollToBottom();
+
+          const text = await fetchWebpage(url);
+          step.status = 'done';
+          step.title = `网页阅读完成 (${text.length} 字)`;
+          await scrollToBottom();
+
+          conversation.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            name: toolName,
+            content: text || '（未能获取网页文本内容）',
+          });
+        } else if (toolName === 'get_today_tasks') {
+          const step: AgentStep = {
+            name: 'get_today_tasks',
+            title: `查询 Todolist 今日任务进度`,
+            status: 'running',
+          };
+          tail.steps.push(step);
+          await scrollToBottom();
+
+          const st = assistant.stats.value;
+          const tasksInfo = {
+            total: st.todayTasks.length,
+            completed: st.completedToday.map((t) => t.title),
+            pending: st.pendingToday.map((t) => t.title),
+            completionRate: `${st.completionRate}%`,
+          };
+          step.status = 'done';
+          step.title = `已获取今日待办：共 ${st.todayTasks.length} 项（完成率 ${st.completionRate}%）`;
+          await scrollToBottom();
+
+          conversation.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            name: toolName,
+            content: JSON.stringify(tasksInfo),
+          });
+        } else {
+          conversation.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            name: toolName,
+            content: JSON.stringify({ error: `未知的工具: ${toolName}` }),
+          });
+        }
       }
     }
 
-    // 2. Final response generation turn:
-    // Pass tools: undefined to guarantee the model generates the final synthesized answer
+    // 2. 最终总结阶段：携带所有已收集的信息，强制模型生成最终详尽回答，不再调用工具
+    conversation.push({
+      role: 'user',
+      content: '请根据上述已获取的所有资讯与正文内容，直接为我进行详细汇总并输出回答，不要输出任何 DSML 标签或调用任何工具，请直接回答。',
+    });
+
     const finalResult = await sendChat({
       endpoint: cfg.endpoint,
       apiKey: cfg.apiKey,
@@ -351,12 +398,14 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
       signal: ctrl.signal,
       onChunk: (chunk) => {
         tail.content += chunk;
+        tail.content = cleanDSMLTags(tail.content);
         scrollToBottom();
       },
     });
 
     if (!stream && finalResult.content) tail.content = finalResult.content;
     if (stream && !tail.content) tail.content = finalResult.content || '（模型已完成检索，但未返回文本总结）';
+    tail.content = cleanDSMLTags(tail.content);
     await scrollToBottom();
     return true;
   } catch (err: any) {

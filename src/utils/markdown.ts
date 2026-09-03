@@ -52,13 +52,20 @@ function inline(raw: string): string {
   return out;
 }
 
+export function cleanDSMLTags(text: string): string {
+  if (!text) return '';
+  return text.replace(/<[|｜]DSML[|｜][\s\S]*?(<\/[|｜]DSML[|｜]tool_calls>|$)/g, '').trim();
+}
+
 /**
  * Renders both:
  *  - the structured daily-report text produced by the built-in generator
  *    (report titles in `**一、…**` form + indented bordered content blocks),
  *  - and ordinary chat markdown (fenced code, headings, bullet lists, `---`).
  */
-export function renderMarkdown(md: string): string {
+export function renderMarkdown(rawMd: string): string {
+  if (!rawMd) return '';
+  const md = cleanDSMLTags(rawMd);
   if (!md) return '';
   const lines = md.split('\n');
   let html = '';
