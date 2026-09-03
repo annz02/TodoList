@@ -1,10 +1,15 @@
-import { ref } from 'vue';
+import { computed, ref, type ComputedRef, type Ref } from 'vue';
 
-// Keys reused from the previous AI summary implementation so existing
-// user configuration (if any) keeps working.
-const KEY_API_KEY = 'ai_summary_api_key';
-const KEY_ENDPOINT = 'ai_summary_endpoint';
-const KEY_MODEL = 'ai_summary_model';
+// The AI assistant talks to ONE connection (a request address + API key).
+// A single endpoint can serve many models, so the config holds a *list* of
+// model names under that one connection. `streaming` is a separate global
+// toggle that applies regardless of the active model.
+
+export const DEFAULT_ENDPOINT = 'https://api.deepseek.com/v1';
+export const DEFAULT_MODEL = 'deepseek-chat';
+
+const KEY_CONNECTION = 'ai_connection'; // JSON { endpoint, apiKey, models, activeModel }
+// Reused key so the existing streaming preference survives.
 const KEY_STREAMING = 'ai_chat_streaming';
 
 const loadBool = (key: string, fallback: boolean): boolean => {
@@ -13,42 +18,161 @@ const loadBool = (key: string, fallback: boolean): boolean => {
   return raw === 'true';
 };
 
-export const DEFAULT_ENDPOINT = 'https://api.deepseek.com/v1';
-export const DEFAULT_MODEL = 'deepseek-chat';
+const trimEndpoint = (v: string) => v.trim().replace(/\/+$/, '');
+const cleanModel = (v: string) => v.trim();
 
-const apiKey = ref(localStorage.getItem(KEY_API_KEY) || '');
-const endpoint = ref(localStorage.getItem(KEY_ENDPOINT) || DEFAULT_ENDPOINT);
-const model = ref(localStorage.getItem(KEY_MODEL) || DEFAULT_MODEL);
-const streaming = ref(loadBool(KEY_STREAMING, true));
-
-export interface AIConfig {
-  apiKey: string;
+interface ConnectionState {
   endpoint: string;
-  model: string;
-  streaming: boolean;
+  apiKey: string;
+  models: string[];
+  activeModel: string | null;
 }
 
-const trimEndpoint = (v: string) => v.trim().replace(/\/+$/, '');
+const seedConnection = (): ConnectionState => ({
+  endpoint: DEFAULT_ENDPOINT,
+  apiKey: '',
+  models: [DEFAULT_MODEL],
+  activeModel: DEFAULT_MODEL,
+});
 
-export function useAIConfig() {
-  const saveSettings = (cfg?: Partial<AIConfig>) => {
-    if (cfg) {
-      if (typeof cfg.apiKey === 'string') apiKey.value = cfg.apiKey.trim();
-      if (typeof cfg.endpoint === 'string') endpoint.value = trimEndpoint(cfg.endpoint);
-      if (typeof cfg.model === 'string') model.value = cfg.model.trim();
-      if (typeof cfg.streaming === 'boolean') streaming.value = cfg.streaming;
+const sanitizeConnection = (raw: any): ConnectionState | null => {
+  if (!raw || typeof raw !== 'object') return null;
+  const endpoint = typeof raw.endpoint === 'string' ? trimEndpoint(raw.endpoint) : '';
+  const models: string[] = Array.isArray(raw.models)
+    ? raw.models.map(cleanModel).filter((m: string) => m.length > 0)
+    : [];
+  // Guarantee a non-empty, de-duplicated model list.
+  const uniqueModels: string[] = Array.from(new Set(models));
+  if (uniqueModels.length === 0) uniqueModels.push(DEFAULT_MODEL);
+  let active: string =
+    typeof raw.activeModel === 'string' ? cleanModel(raw.activeModel) : '';
+  if (!uniqueModels.some((m) => m === active)) active = uniqueModels[0];
+  return {
+    endpoint: endpoint || DEFAULT_ENDPOINT,
+    apiKey: typeof raw.apiKey === 'string' ? raw.apiKey.trim() : '',
+    models: uniqueModels,
+    activeModel: active,
+  };
+};
+
+// Load the single connection; seed a default one if missing/invalid.
+let initial: ConnectionState;
+try {
+  const raw = JSON.parse(localStorage.getItem(KEY_CONNECTION) || 'null');
+  initial = sanitizeConnection(raw) ?? seedConnection();
+} catch {
+  initial = seedConnection();
+}
+
+const endpoint = ref<string>(initial.endpoint);
+const apiKey = ref<string>(initial.apiKey);
+const models = ref<string[]>(initial.models);
+const activeModel = ref<string | null>(initial.activeModel);
+const streaming = ref(loadBool(KEY_STREAMING, true));
+
+const persist = () => {
+  localStorage.setItem(
+    KEY_CONNECTION,
+    JSON.stringify({
+      endpoint: endpoint.value,
+      apiKey: apiKey.value,
+      models: models.value,
+      activeModel: activeModel.value,
+    }),
+  );
+};
+
+// Always resolves because the list is never empty and activeModel is normalized.
+const activeModelName = computed<string>(() =>
+  models.value.find((m) => m === activeModel.value) ?? models.value[0],
+);
+
+// The exact payload used when building a request — stable snapshot source.
+const connectionCfg = computed<{ endpoint: string; apiKey: string; model: string }>(() => ({
+  endpoint: endpoint.value,
+  apiKey: apiKey.value,
+  model: activeModelName.value,
+}));
+
+export interface AIConfigStore {
+  endpoint: Ref<string>;
+  apiKey: Ref<string>;
+  models: Ref<string[]>;
+  activeModel: Ref<string | null>;
+  activeModelName: ComputedRef<string>;
+  connection: typeof connectionCfg;
+  streaming: Ref<boolean>;
+  setConnection: (ep: string, key: string) => void;
+  setModels: (names: string[], active: string | null) => void;
+  addModel: (name: string) => void;
+  removeModel: (name: string) => void;
+  setActiveModel: (name: string) => void;
+  setStreaming: (v: boolean) => void;
+}
+
+export function useAIConfig(): AIConfigStore {
+  // Commit the single request-address + API key.
+  const setConnection = (ep: string, key: string) => {
+    endpoint.value = trimEndpoint(ep) || DEFAULT_ENDPOINT;
+    apiKey.value = (key ?? '').trim();
+    persist();
+  };
+
+  // Bulk-replace the model list (used by the settings form's 保存). Guarantees
+  // a non-empty, trimmed, de-duplicated list and repoints the active model if
+  // the chosen one isn't present.
+  const setModels = (names: string[], active: string | null) => {
+    const list = Array.from(new Set((names || []).map(cleanModel).filter((m) => m.length > 0)));
+    if (list.length === 0) list.push(DEFAULT_MODEL);
+    let act = active ? cleanModel(active) : '';
+    if (!list.some((m) => m === act)) act = list[0];
+    models.value = list;
+    activeModel.value = act;
+    persist();
+  };
+
+  // Add a model name to the list (trimmed, de-duplicated, non-empty enforced).
+  const addModel = (name: string) => {
+    const m = cleanModel(name);
+    if (!m) return;
+    if (models.value.some((x) => x === m)) return;
+    models.value = [...models.value, m];
+    persist();
+  };
+
+  const removeModel = (name: string) => {
+    if (models.value.length <= 1) return; // always keep at least one
+    models.value = models.value.filter((m) => m !== name);
+    if (activeModel.value === name) {
+      activeModel.value = models.value[0];
     }
-    localStorage.setItem(KEY_API_KEY, apiKey.value);
-    localStorage.setItem(KEY_ENDPOINT, endpoint.value);
-    localStorage.setItem(KEY_MODEL, model.value);
-    localStorage.setItem(KEY_STREAMING, String(streaming.value));
+    persist();
+  };
+
+  const setActiveModel = (name: string) => {
+    if (!models.value.some((m) => m === name)) return;
+    activeModel.value = name;
+    persist();
+  };
+
+  const setStreaming = (v: boolean) => {
+    streaming.value = v;
+    localStorage.setItem(KEY_STREAMING, String(v));
   };
 
   return {
-    apiKey,
     endpoint,
-    model,
+    apiKey,
+    models,
+    activeModel,
+    activeModelName,
+    connection: connectionCfg,
     streaming,
-    saveSettings,
+    setConnection,
+    setModels,
+    addModel,
+    removeModel,
+    setActiveModel,
+    setStreaming,
   };
 }

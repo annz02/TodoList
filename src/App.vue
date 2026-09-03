@@ -5,7 +5,6 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
 import type { Todo } from './types';
 import { useTheme } from './composables/useTheme';
-import { useToast } from './composables/useToast';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 
 // Import components
@@ -15,13 +14,11 @@ import TaskItem from './components/TaskItem.vue';
 import InlineTaskCard from './components/InlineTaskCard.vue';
 import CalendarView from './components/CalendarView.vue';
 import AIChatView from './components/AIChatView.vue';
-import Toast from './components/Toast.vue';
 import UpdateModal from './components/UpdateModal.vue';
 import ChangelogModal from './components/ChangelogModal.vue';
 import { useUpdate } from './composables/useUpdate';
 
 const { initTheme } = useTheme();
-const { showToast } = useToast();
 const { currentVersion, autoCheckUpdate, checkUpdate, pendingUpdate, installUpdate, applyUpdateState, refreshUpdateState, updateBusy, progressPercent } = useUpdate();
 
 const showStartupUpdateModal = ref(false);
@@ -170,8 +167,7 @@ onMounted(async () => {
           const minsStr = Math.max(0, Math.round(diffMinutes));
           const msg = diffMinutes <= 0 ? `「${task.title}」已经到期啦！` : `「${task.title}」还有不到 ${minsStr} 分钟就要到期啦！`;
           
-          // 1. In-app Toast and Sound
-          showToast(msg, 8000, '任务临期提醒', 'warning');
+          // 1. Sound
           playBeep();
           
           // 2. System Desktop Notification
@@ -603,7 +599,6 @@ const closeWindow = () => getCurrentWindow().close();
   </main>
 
   <SettingsModal :show="showSettingsModal" @close="showSettingsModal = false" />
-  <Toast />
 
   <!-- 启动自动检查更新弹窗 -->
   <UpdateModal

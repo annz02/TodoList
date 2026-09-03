@@ -5,20 +5,26 @@ import { useAIConfig } from '../composables/useAIConfig';
 import { useAIAssistant } from '../composables/useAIAssistant';
 import { useChatStream, type ChatMessage } from '../composables/useChatStream';
 import { renderMarkdown } from '../utils/markdown';
-import { useToast } from '../composables/useToast';
 
 const props = defineProps<{ todos: Todo[] }>();
 
-const { apiKey, endpoint, model, streaming, saveSettings: persistConfig } = useAIConfig();
-const { showToast } = useToast();
+const { endpoint, apiKey, models, connection, streaming, setConnection, setModels, setActiveModel, setStreaming } = useAIConfig();
 const { sendChat } = useChatStream();
 const assistant = useAIAssistant(computed(() => props.todos));
 
-// Editable copies previewed in the settings panel before saving.
-const draftKey = ref(apiKey.value);
+// ---------------------------------------------------------------------------
+// Single-connection model manager (settings page + the chat model chip)
+// ---------------------------------------------------------------------------
+// Drafts for the ONE request address + API key (committed via 保存).
 const draftEndpoint = ref(endpoint.value);
-const draftModel = ref(model.value);
-const draftStreaming = ref(streaming.value);
+const draftApiKey = ref(apiKey.value);
+// Editable model rows under that connection — one input per model name.
+let draftSeq = 0;
+const draftModels = ref<{ id: number; name: string }[]>([]);
+// Whether the in-place model dropdown in the chat footer is open.
+const modelPickerOpen = ref(false);
+
+const activeModelName = computed(() => connection.value.model);
 
 const view = ref<'chat' | 'settings'>('chat');
 const input = ref('');
@@ -41,7 +47,7 @@ const helpText = `你好，我是 AI 助手 ✨
 - **自由对话**：在下方输入框提问，与我进行多轮对话。
 - **一键生成工作日报**：点击顶部「今日工作日报」，我会结合你今天的任务与 Git 提交记录为你生成日报。
 
-点右上角 ⚙️ 配置 API Key / Endpoint / Model 后即可获得最佳体验；未配置时会使用内置规则生成简单结果。`;
+在下方输入框下方的模型选择器中选择并配置模型（右上角 ⚙️ 也可进入模型配置）后可获得最佳体验；未配置 API Key 时会使用内置规则生成简单结果。`;
 
 if (messages.value.length === 0) {
   messages.value.push({ id: idSeq++, role: 'assistant', content: helpText });
@@ -57,7 +63,7 @@ const lastAssistant = (): LocalMsg => messages.value[messages.value.length - 1];
 const toApiMessages = (): ChatMessage[] => {
   const system = apiKey.value.trim()
     ? '你是 Todolist 内置的 AI 助手，可协助用户整理待办、分析任务、总结每日工作日报。回答请简洁、准确、使用中文。'
-    : '你是 Todolist 内置的 AI 助手。当前未配置大模型 API，仅能根据内置规则生成工作日报。请友好提醒用户点击右上角设置配置模型。';
+    : '你是 Todolist 内置的 AI 助手。当前未配置大模型 API，仅能根据内置规则生成工作日报。请友好提醒用户在下方模型选择器中选择并配置模型。';
   return [
     { role: 'system', content: system },
     ...messages.value.map((m) => ({ role: m.role, content: m.content })),
@@ -74,11 +80,13 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
   abortCtrl.value = ctrl;
   isWaiting.value = true;
   const stream = streaming.value;
+  // Snapshot the connection so a mid-flight switch can't retarget this request.
+  const cfg = connection.value;
   try {
     const full = await sendChat({
-      endpoint: endpoint.value,
-      apiKey: apiKey.value,
-      model: model.value,
+      endpoint: cfg.endpoint,
+      apiKey: cfg.apiKey,
+      model: cfg.model,
       messages: toApiMessages(),
       stream,
       signal: ctrl.signal,
@@ -96,7 +104,7 @@ async function streamInto(tail: LocalMsg): Promise<boolean> {
     if (ctrl.signal.aborted) {
       if (!tail.content) tail.content = '⏹️ 已停止生成。';
     } else {
-      tail.content += `\n\n> ⚠️ 调用出错：${err?.message || err}\n> 请检查右上角 ⚙️ 配置的 API Key / Endpoint / Model，或网络是否可用。`;
+      tail.content += `\n\n> ⚠️ 调用出错：${err?.message || err}\n> 请检查当前模型的请求地址 / API Key / 模型，或网络是否可用。`;
     }
     await scrollToBottom();
     return false;
@@ -121,7 +129,7 @@ const sendMessage = async () => {
   if (apiKey.value.trim()) {
     await streamInto(tail);
   } else {
-    tail.content = '（尚未配置大模型，点右上角 ⚙️ 配置 API Key 后即可与我对话；通用问答需要模型支持。）';
+    tail.content = '（尚未配置 API Key，请在输入框下方或 ⚙️ 模型配置中填写后即可与我对话；通用问答需要模型支持。）';
     await scrollToBottom();
   }
 };
@@ -165,9 +173,8 @@ const generateDailyReport = async () => {
     messages.value.push({ id: idSeq++, role: 'user', content: '请为我生成今天的 AI 工作日报' });
     messages.value.push({ id: idSeq++, role: 'assistant', content: `📋 已根据内置规则为您生成今日工作日报：\n\n${summary}` });
     await scrollToBottom();
-    showToast('工作日报已生成', 3000, '完成', 'success');
   } catch (err: any) {
-    showToast(`生成日报失败：${err?.message || err}`, 4000, '错误', 'warning');
+    console.error('生成日报失败：', err);
   } finally {
     isReportRunning.value = false;
   }
@@ -192,12 +199,13 @@ const copyMessage = async (msg: LocalMsg) => {
   }
 };
 
-// ---------- Settings ----------
+// ---------- Model manager settings ----------
 const openSettings = () => {
-  draftKey.value = apiKey.value;
+  // Make the drafts reflect the current saved config.
   draftEndpoint.value = endpoint.value;
-  draftModel.value = model.value;
-  draftStreaming.value = streaming.value;
+  draftApiKey.value = apiKey.value;
+  draftModels.value = models.value.map((m) => ({ id: ++draftSeq, name: m }));
+  modelPickerOpen.value = false;
   view.value = 'settings';
 };
 
@@ -205,15 +213,42 @@ const backToChat = () => {
   view.value = 'chat';
 };
 
-const saveConfig = () => {
-  persistConfig({
-    apiKey: draftKey.value,
-    endpoint: draftEndpoint.value,
-    model: draftModel.value,
-    streaming: draftStreaming.value,
-  });
-  view.value = 'chat';
-  showToast('模型配置已保存', 2500, '完成', 'success');
+// Add an empty model row to the draft list.
+const addModelRow = () => {
+  draftModels.value = [...draftModels.value, { id: ++draftSeq, name: '' }];
+};
+
+// Remove a draft model row by its row id (always keeps at least one row).
+const removeModelRow = (id: number) => {
+  draftModels.value = draftModels.value.filter((r) => r.id !== id);
+  if (draftModels.value.length === 0) addModelRow();
+};
+
+// Commit the whole single connection: request address + key + model rows.
+const handleSaveConfig = () => {
+  setConnection(draftEndpoint.value, draftApiKey.value);
+  const names = draftModels.value
+    .map((r) => r.name)
+    .map((n) => n.trim())
+    .filter((n) => n.length > 0);
+  // Keep the currently active model if it's still configured; otherwise setModels
+  // falls back to the first model. The model switch happens in the chat footer.
+  setModels(names, activeModelName.value || null);
+  backToChat();
+};
+
+const toggleStreaming = () => setStreaming(!streaming.value);
+
+// Can only save when an address is present and at least one model name is filled.
+const canSaveConfig = computed(() => {
+  if (!draftEndpoint.value.trim()) return false;
+  return draftModels.value.some((r) => r.name.trim().length > 0);
+});
+
+// Pick a model from the chat footer chip dropdown (immediate, live).
+const pickModel = (name: string) => {
+  setActiveModel(name);
+  modelPickerOpen.value = false;
 };
 
 // Which assistant message is waiting for its first token (drives the typing dots).
@@ -279,16 +314,47 @@ const currentTypingMsg = computed(() =>
       </div>
 
       <!-- Input -->
-      <div class="chat-inputbar">
-        <textarea
-          v-model="input"
-          rows="1"
-          class="input-area"
-          placeholder="输入消息，Enter 发送，Shift+Enter 换行"
-          @keydown="onKeydown"
-        ></textarea>
-        <button v-if="isWaiting" class="send-btn stop" @click="stopGenerating">停止</button>
-        <button v-else class="send-btn" :disabled="!input.trim()" @click="sendMessage">发送</button>
+      <div class="chat-footer">
+        <div class="chat-inputbar">
+          <textarea
+            v-model="input"
+            rows="1"
+            class="input-area"
+            placeholder="输入消息，Enter 发送，Shift+Enter 换行"
+            @keydown="onKeydown"
+          ></textarea>
+          <button v-if="isWaiting" class="send-btn stop" @click="stopGenerating">停止</button>
+          <button v-else class="send-btn" :disabled="!input.trim()" @click="sendMessage">发送</button>
+        </div>
+
+        <!-- Model selector strip -->
+        <div class="model-strip">
+          <button
+            type="button"
+            class="model-chip"
+            title="切换模型"
+            @click="modelPickerOpen = !modelPickerOpen"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="17" x2="14" y2="17"></line></svg>
+            <span class="model-chip-label">{{ activeModelName }}</span>
+            <svg class="model-chevron" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+
+          <div v-if="modelPickerOpen" class="model-dropdown">
+            <div
+              v-for="m in models"
+              :key="m"
+              class="model-option"
+              :class="{ active: m === activeModelName }"
+              @click="pickModel(m)"
+            >
+              <div class="model-option-head">
+                <span class="model-option-name">{{ m }}</span>
+                <span v-if="m === activeModelName" class="model-active-tag">当前</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </template>
 
@@ -313,53 +379,73 @@ const currentTypingMsg = computed(() =>
             </div>
           </div>
 
-            <form class="config-card" @submit.prevent="saveConfig">
-              <div class="card-section">
-                <div class="field">
-                  <label class="field-label" for="ai-key">API Key</label>
-                  <input
-                    id="ai-key"
-                    class="field-input mono"
-                    type="password"
-                    autocomplete="off"
-                    spellcheck="false"
-                    v-model="draftKey"
-                    placeholder="sk-…"
-                  />
-                  <div class="field-hint" :class="{ tip: draftKey }">
-                    {{ draftKey ? '密钥仅保存在本机，不会上传。' : '未填写时将仅使用内置规则生成简单结果。' }}
-                  </div>
-                </div>
-
-                <div class="field">
-                  <label class="field-label" for="ai-endpoint">请求地址</label>
-                  <input
-                    id="ai-endpoint"
-                    class="field-input mono"
-                    type="text"
-                    spellcheck="false"
-                    v-model="draftEndpoint"
-                    placeholder="https://api.deepseek.com/v1"
-                  />
-                  <div class="field-hint">兼容 OpenAI 格式，通常以 /v1 结尾（DeepSeek、OpenAI、Ollama 等）。</div>
-                </div>
-
-                <div class="field">
-                  <label class="field-label" for="ai-model">模型</label>
-                  <input
-                    id="ai-model"
-                    class="field-input mono"
-                    type="text"
-                    spellcheck="false"
-                    v-model="draftModel"
-                    placeholder="deepseek-chat / gpt-4o-mini …"
-                  />
-                  <div class="field-hint">填写所配置端点上可用的模型名称，例如 deepseek-chat、gpt-4o-mini。</div>
-                </div>
+          <!-- Single form: spread over the whole page width (no narrow card) -->
+          <form class="ai-config" @submit.prevent="handleSaveConfig">
+            <div class="ai-config-conn">
+              <div class="field">
+                <label class="field-label" for="ai-endpoint">请求地址</label>
+                <input
+                  id="ai-endpoint"
+                  class="field-input mono"
+                  type="text"
+                  spellcheck="false"
+                  v-model="draftEndpoint"
+                  placeholder="https://api.deepseek.com/v1"
+                />
+                <div class="field-hint">兼容 OpenAI 格式，通常以 /v1 结尾（DeepSeek、OpenAI、Ollama 等）。</div>
               </div>
 
-              <div class="card-divider"></div>
+              <div class="field">
+                <label class="field-label" for="ai-key">API Key</label>
+                <input
+                  id="ai-key"
+                  class="field-input mono"
+                  type="password"
+                  autocomplete="off"
+                  spellcheck="false"
+                  v-model="draftApiKey"
+                  placeholder="sk-…"
+                />
+                <div class="field-hint" :class="{ tip: draftApiKey }">
+                  {{ draftApiKey ? '密钥仅保存在本机，不会上传。' : '未填写时将仅使用内置规则生成简单结果。' }}
+                </div>
+              </div>
+            </div>
 
+            <!-- 模型：多个输入行，每行一个模型名称，横排铺开 -->
+            <div class="ai-config-section">
+              <div class="section-title">模型</div>
+              <div class="model-editor">
+                <div
+                  v-for="row in draftModels"
+                  :key="row.id"
+                  class="model-editor-row"
+                >
+                  <input
+                    class="field-input mono model-row-input"
+                    type="text"
+                    spellcheck="false"
+                    v-model="row.name"
+                    placeholder="deepseek-chat"
+                  />
+                  <button
+                    type="button"
+                    class="model-row-del"
+                    :disabled="draftModels.length <= 1"
+                    title="移除该模型"
+                    @click.prevent="removeModelRow(row.id)"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                </div>
+              </div>
+              <button type="button" class="btn-add-model" @click.prevent="addModelRow">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                添加模型
+              </button>
+            </div>
+
+            <div class="ai-config-section">
               <div class="toggle-row">
                 <div class="toggle-text">
                   <span class="toggle-title">流式输出</span>
@@ -368,21 +454,26 @@ const currentTypingMsg = computed(() =>
                 <button
                   type="button"
                   class="switch"
-                  :class="{ on: draftStreaming }"
-                  :aria-pressed="draftStreaming"
-                  @click="draftStreaming = !draftStreaming"
+                  :class="{ on: streaming }"
+                  :aria-pressed="streaming"
+                  @click="toggleStreaming"
                 >
                   <span class="switch-knob"></span>
                 </button>
               </div>
+            </div>
 
-              <div class="card-actions">
-                <button type="button" class="btn-secondary" @click="backToChat">取消</button>
-                <button type="submit" class="btn-primary">保存配置</button>
-              </div>
-            </form>
-          </div>
+            <div class="ai-config-actions">
+              <button type="button" class="btn-secondary" @click="backToChat">返回</button>
+              <button
+                type="submit"
+                class="btn-primary"
+                :disabled="!canSaveConfig"
+              >保存配置</button>
+            </div>
+          </form>
         </div>
+      </div>
     </div>
   </div>
 </template>
@@ -473,21 +564,39 @@ const currentTypingMsg = computed(() =>
 .brand-title { margin: 0; font-size: 19px; font-weight: 700; color: var(--text-main); line-height: 1.3; }
 .brand-sub { margin: 3px 0 0; font-size: 12.5px; color: var(--text-muted); line-height: 1.55; }
 
-/* Form card */
-.config-card {
-  background: var(--bg-sidebar);
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  padding: 20px 22px;
+/* Settings form: full width, spread across the page (no card) */
+.ai-config {
   display: flex;
   flex-direction: column;
+  width: 100%;
 }
-.card-section { display: flex; flex-direction: column; gap: 16px; }
+.ai-config-conn {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.ai-config-section {
+  margin-top: 22px;
+}
+.section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 12px;
+}
+.ai-config-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-color);
+}
 
 /* Field stack */
 .field { display: flex; flex-direction: column; }
 .field-label {
-  font-size: 12.5px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-main);
   margin-bottom: 6px;
@@ -518,9 +627,6 @@ const currentTypingMsg = computed(() =>
 .field-hint:empty { display: none; }
 .field-hint.tip { color: var(--text-muted); }
 
-/* Divider */
-.card-divider { height: 1px; background: var(--border-color); margin: 20px 0; }
-
 /* Toggle row */
 .toggle-row {
   display: flex;
@@ -529,7 +635,7 @@ const currentTypingMsg = computed(() =>
   gap: 16px;
 }
 .toggle-text { display: flex; flex-direction: column; gap: 3px; }
-.toggle-title { font-size: 13px; font-weight: 600; color: var(--text-main); }
+.toggle-title { font-size: 15px; font-weight: 700; color: var(--text-main); }
 .toggle-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
 .switch {
   flex-shrink: 0;
@@ -554,15 +660,6 @@ const currentTypingMsg = computed(() =>
 }
 .switch.on .switch-knob { transform: translateX(20px); }
 
-/* Actions */
-.card-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid var(--border-color);
-}
 .btn-secondary {
   background: var(--bg-main);
   border: 1px solid var(--border-color);
@@ -650,10 +747,14 @@ const currentTypingMsg = computed(() =>
 .md-content :deep(a) { color: var(--primary-color); }
 .md-content :deep(strong) { font-weight: 600; }
 
-/* Input bar */
-.chat-inputbar {
-  display: flex; align-items: flex-end; gap: 10px; padding-top: 12px;
+/* Input footer + model selector */
+.chat-footer {
+  display: flex; flex-direction: column; gap: 8px;
+  padding-top: 12px;
   border-top: 1px solid var(--border-color);
+}
+.chat-inputbar {
+  display: flex; align-items: flex-end; gap: 10px;
 }
 .input-area {
   flex: 1; resize: none; min-height: 40px; max-height: 140px;
@@ -670,4 +771,75 @@ const currentTypingMsg = computed(() =>
 }
 .send-btn:disabled { opacity: .55; cursor: not-allowed; }
 .send-btn.stop { background: var(--danger-color, #ef4444); }
+
+/* Chat model selector strip */
+.model-strip { position: relative; align-self: stretch; }
+.model-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg-sidebar); border: 1px solid var(--border-color);
+  color: var(--text-secondary); border-radius: 9px;
+  padding: 6px 10px; font-size: 12px; cursor: pointer;
+  transition: color .18s ease, border-color .18s ease;
+}
+.model-chip:hover { color: var(--primary-color); border-color: var(--primary-color); }
+.model-chip-label {
+  max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.model-chevron { color: var(--text-muted); transition: transform .18s ease; }
+.model-chip:hover .model-chevron { transform: translateY(1px); }
+.model-dropdown {
+  position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 30;
+  min-width: 250px; max-width: 340px; max-height: 280px; overflow-y: auto;
+  background: var(--bg-main); border: 1px solid var(--border-color);
+  border-radius: 11px; box-shadow: 0 10px 28px rgba(0,0,0,.14);
+  padding: 5px; display: flex; flex-direction: column;
+}
+.model-option {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  color: var(--text-main);
+}
+.model-option:hover { background: var(--primary-light); }
+.model-option.active { background: color-mix(in srgb, var(--primary-color) 12%, transparent); }
+.model-option-head { display: flex; align-items: center; gap: 8px; }
+.model-option-name { font-size: 13px; font-weight: 600; }
+.model-active-tag {
+  margin-left: auto; font-size: 10px; font-weight: 700; color: #fff;
+  background: var(--primary-color); padding: 1px 7px; border-radius: 10px;
+}
+/* 模型 rows — spread across the page width */
+.model-editor {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 10px 18px;
+}
+.model-editor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.model-row-input { flex: 1; }
+.model-row-del {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0;
+  color: var(--text-muted); background: transparent; border: none; border-radius: 8px;
+  cursor: pointer; transition: color .15s ease, background-color .15s ease;
+}
+.model-row-del:hover:not(:disabled) {
+  color: var(--danger-color, #ef4444);
+  background: color-mix(in srgb, var(--danger-color, #ef4444) 12%, transparent);
+}
+.model-row-del:disabled { opacity: .35; cursor: not-allowed; }
+.btn-add-model {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--primary-color);
+  background: transparent; border: none; padding: 6px 8px; border-radius: 8px;
+  cursor: pointer; transition: background-color .15s ease;
+}
+.btn-add-model:hover { background: var(--primary-light); }
+
 </style>
