@@ -31,6 +31,12 @@ const showInlineCreate = ref(false);
 const searchQuery = ref('');
 const activeCategory = ref('today');
 const showSettingsModal = ref(false);
+const settingsModalTab = ref<'general' | 'ai' | 'shortcuts'>('general');
+
+const handleOpenSettings = (tab: 'general' | 'ai' | 'shortcuts' = 'general') => {
+  settingsModalTab.value = tab;
+  showSettingsModal.value = true;
+};
 let checkInterval: number;
 
 const syncCurrentTime = () => {
@@ -578,7 +584,7 @@ const closeWindow = () => getCurrentWindow().close();
     :completedCount="completedCount"
     :allCount="allCount"
     @add-task-clicked="() => handleAddTaskClick()"
-    @open-settings="showSettingsModal = true"
+    @open-settings="handleOpenSettings('general')"
   />
 
   <!-- Main Content -->
@@ -639,7 +645,7 @@ const closeWindow = () => getCurrentWindow().close();
         @complete-task="handleCompleteTaskFromAI"
         @delete-task="handleDeleteTaskFromAI"
         @update-task="handleUpdateTaskFromAI"
-        @open-settings="showSettingsModal = true"
+        @open-settings="(tab) => handleOpenSettings(tab || 'ai')"
       />
     </div>
 
@@ -705,7 +711,11 @@ const closeWindow = () => getCurrentWindow().close();
     </div>
   </main>
 
-  <SettingsModal :show="showSettingsModal" @close="showSettingsModal = false" />
+  <SettingsModal
+    :show="showSettingsModal"
+    :initial-tab="settingsModalTab"
+    @close="showSettingsModal = false"
+  />
 
   <!-- 启动自动检查更新弹窗 -->
   <UpdateModal

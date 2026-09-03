@@ -6,7 +6,10 @@ import { useAIConfig } from '../composables/useAIConfig';
 import UpdateModal from './UpdateModal.vue';
 import ChangelogModal from './ChangelogModal.vue';
 
-const props = defineProps<{ show: boolean }>();
+const props = defineProps<{
+  show: boolean;
+  initialTab?: 'general' | 'ai' | 'shortcuts';
+}>();
 const emit = defineEmits<{ (e: 'close'): void }>();
 
 const { primaryColor, themeColors, setPrimaryColor, themeMode, setThemeMode } = useTheme();
@@ -42,7 +45,7 @@ const {
   setBochaApiKey,
 } = useAIConfig();
 
-const activeTab = ref<'general' | 'ai' | 'shortcuts'>('general');
+const activeTab = ref<'general' | 'ai' | 'shortcuts'>(props.initialTab || 'general');
 const showUpdateModal = ref(false);
 const showChangelogModal = ref(false);
 
@@ -72,7 +75,18 @@ const syncAIDrafts = () => {
 };
 
 watch(() => props.show, (shown) => {
-  if (shown) syncAIDrafts();
+  if (shown) {
+    if (props.initialTab) {
+      activeTab.value = props.initialTab;
+    }
+    syncAIDrafts();
+  }
+});
+
+watch(() => props.initialTab, (t) => {
+  if (t) {
+    activeTab.value = t;
+  }
 });
 
 const addModelRow = () => {
