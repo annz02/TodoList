@@ -54,7 +54,27 @@ function inline(raw: string): string {
 
 export function cleanDSMLTags(text: string): string {
   if (!text) return '';
-  return text.replace(/<[|｜]DSML[|｜][\s\S]*?(<\/[|｜]DSML[|｜]tool_calls>|$)/g, '').trim();
+  let out = text;
+
+  // 1) Whole envelope if the model wrapped its tool block.
+  out = out.replace(/<\/?[|｜]?DSMLtool_calls[|｜]?>?[\s\S]*?<\/?[|｜]?DSMLtool_calls[|｜]?>/gi, ' ');
+
+  // 2) Complete paired invoke/parameter blocks.
+  const paired = /<[|｜]\s*DSML\s*[|｜]\s*invoke\b[\s\S]*?<\/[|｜]\s*DSML\s*[|｜]\s*invoke\s*>/gi;
+  let prev: string;
+  do {
+    prev = out;
+    out = out.replace(paired, ' ');
+  } while (out !== prev);
+
+  // 3) Any leftover lone <DSML ...> opener: drop only the broken stub up to the
+  //    first newline, so genuine following text is kept instead of swallowed.
+  out = out.replace(/<[|｜]\s*DSML[^>]*?(?:\n|$)/gi, '');
+
+  // 4) Clean up leftover stray end-tags.
+  out = out.replace(/<\/[|｜]\s*DSML[^>]*>/gi, '');
+
+  return out.replace(/[ \t]{2,}/g, ' ').trim();
 }
 
 /**

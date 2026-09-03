@@ -272,11 +272,14 @@ const toggleSources = (msgId: number) => {
 };
 
 const openUrl = async (url: string) => {
-  if (!url) return;
+  // Only open http(s) links. Prevents shell injection / local-file launching if
+  // an untrusted (e.g. search-derived) URL ever ends up here.
+  const raw = (url || '').trim();
+  if (!/^https?:\/\//i.test(raw)) return;
   try {
-    await invoke('open_url', { url });
+    await invoke('open_url', { url: raw });
   } catch {
-    window.open(url, '_blank');
+    window.open(raw, '_blank');
   }
 };
 
@@ -341,21 +344,34 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
   const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 星期${['日', '一', '二', '三', '四', '五', '六'][now.getDay()]}`;
 
   const system = apiKey.value.trim()
-    ? `你是 Todolist 内置的智能助手（基于 Antigravity Agent 智能体架构）。当前时间：${dateStr}。\n你具备全套待办管理与网络工具：\n- create_task: 新建待办；\n- update_task: 修改已有待办的标题、分类、截止时间；\n- delete_task: 删除某项待办；\n- complete_task: 标记待办完成；\n- get_today_tasks: 查询今日任务进度；\n- web_search / fetch_webpage: 网络检索与网页精读。\n【操作准则】：当用户提出新建、修改、删除或完成待办的诉求时，请直接调用对应工具执行。回答请准确、专业、友好并使用中文。\n【排版要求（务必遵守）】：回答务必注重条理与可读性。\n1) 如果内容包含多个方面或步骤，先用 **加粗小节标题**（如 **一、要点分析**、**二、建议**）分节；\n2) 并列要点一律用行首符号 - 或有序 1. 2. 列表逐条列出，不要把它们吞进同一句话里；\n3) 段落与条目之间用空行分隔，不要输出连续一整段拥挤的文字墙；\n4) 不确定或有取舍时给出简短小结；内容简短时 1-3 条即可，不必强行堆砌。`
-    : '你是 Todolist 内置的 AI 助手。当前未配置大模型 API，仅能根据内置规则生成工作日报。请友好提醒用户在下方模型选择器中选择并配置模型；如果你在生成日报，请按有结构、分段、分点的条理输出。';
+    ? `你是 Todolist 中的待办助手，由用户配置的大模型服务驱动。当前接入地址：${cfg.endpoint}；当前使用模型：${cfg.model}。当前时间：${dateStr}。\n【身份如实准则】：当被问到你是什么模型、由谁驱动、基于什么架构或框架时，请如实说明你是由用户配置的大模型服务（接入地址 ${cfg.endpoint}、模型 ${cfg.model}）驱动的待办助手，不要自称使用任何未用户配置或虚构的框架、架构或底层模型。\n【工具能力】：你可为用户调用待办管理与网络工具：\n- create_task: 新建待办；\n- update_task: 修改已有待办的标题、分类、截止时间；\n- delete_task: 删除某项待办；\n- complete_task: 标记待办完成；\n- get_today_tasks: 查询今日任务进度；\n- web_search / fetch_webpage: 网络检索与网页精读。\n【操作准则】：当用户提出新建、修改、删除或完成待办的诉求时，请直接调用对应工具执行。用户未配置网络检索时请不要编造网络检索结果。回答请准确、专业、友好并使用中文。\n【排版要求（务必遵守）】：回答务必注重条理与可读性。\n1) 如果内容包含多个方面或步骤，先用 **加粗小节标题**（如 **一、要点分析**、**二、建议**）分节；\n2) 并列要点一律用行首符号 - 或有序 1. 2. 列表逐条列出，不要把它们吞进同一句话里；\n3) 段落与条目之间用空行分隔，不要输出连续一整段拥挤的文字墙；\n4) 不确定或有取舍时给出简短小结；内容简短时 1-3 条即可，不必强行堆砌。`
+    : '你是 Todolist 的待办助手。当前未配置大模型 API，无法进行通用问答与在线推理；当被问到你是什么模型或由什么驱动时，请如实说明当前由软件内置规则驱动，并友好提醒用户在下方模型选择器（或右上角 ⚙️ 模型配置）中填入请求地址与 API Key 后即可获得模型驱动的完整问答。如果你在生成日报，请按有结构、分段、分点的条理输出。';
+
+  // Only feed the most recent turns to the model, so very long chats don't
+  // overflow the context window nor re-inject stale raw tool/step walls. Each
+  // past assistant bubble carries only its final rendered text (DSML already
+  // stripped), which is all the model needs to stay coherent.
+  const HISTORY_TURNS = 20;
+  const beforeCurrent = messages.value.slice(0, -1);
+  const trimmedHistory = beforeCurrent.slice(-HISTORY_TURNS).map((m) => ({
+    role: m.role as 'system' | 'user' | 'assistant' | 'tool',
+    content: cleanDSMLTags(m.content),
+  }));
 
   const conversation: ChatMessage[] = [
     { role: 'system', content: system },
     ...extraContext,
-    ...messages.value.slice(0, -1).map((m) => ({
-      role: m.role as 'system' | 'user' | 'assistant' | 'tool',
-      content: m.content,
-    })),
+    ...trimmedHistory,
   ];
 
   try {
     let toolTurn = 0;
-    const MAX_TOOL_TURNS = 2;
+    // Allow real chained tool calls: each turn the model may call several
+    // tools, then see their results and either answer directly (returns early,
+    // line ~413) or continue chaining (web_search -> fetch_webpage -> ...).
+    // 4 turns is enough for typical multi-hop research while staying bounded
+    // so the in-memory conversation doesn't grow unboundedly or cost too much.
+    const MAX_TOOL_TURNS = 4;
 
     while (toolTurn < MAX_TOOL_TURNS) {
       toolTurn++;
@@ -387,8 +403,16 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
 
       // 如果模型没有发起任何工具调用，说明已给出了直接回复！
       if (!toolCalls || toolCalls.length === 0) {
+        // Replace whatever came back with the final content (stream already
+        // appended via onChunk). Non-streaming replies read result.content once.
         if (!stream && result.content) tail.content = result.content;
-        if (stream && !tail.content) tail.content = result.content || '（模型返回了空回复，请稍后重试）';
+        if (cleanDSMLTags(tail.content) === '') {
+          // No usable answer (empty reply in either mode). Surface a helpful
+          // hint instead of a blank bubble.
+          tail.content =
+            result.content ||
+            '（模型未返回可显示的内容：可能是请求被限流、上下文过长被截断，或该模型未正常应答。可稍后重试，或将问题说得更简短具体。）';
+        }
         tail.content = cleanDSMLTags(tail.content);
         await scrollToBottom();
         return true;
@@ -679,10 +703,10 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
       }
     }
 
-    // 2. 最终总结阶段：携带所有已收集的信息，强制模型生成最终详尽回答，不再调用工具
+    // 2. 最终总结阶段：携带所有已收集的工具结果，强制模型直接给出最终回答，不再调用工具
     conversation.push({
       role: 'user',
-      content: '请根据上述已获取的所有资讯与正文内容，直接为我进行详细汇总并输出回答，不要输出任何 DSML 标签或调用任何工具，请直接回答。',
+      content: '请依据上文已经执行完成的工具调用结果，直接为当前问题给出清晰完整的最终回答。不要再执行任何工具、不要再输出 DSML 标签，直接输出供用户阅读的正文即可。',
     });
 
     const finalResult = await sendChat({
@@ -701,7 +725,11 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
     });
 
     if (!stream && finalResult.content) tail.content = finalResult.content;
-    if (stream && !tail.content) tail.content = finalResult.content || '（模型已完成检索，但未返回文本总结）';
+    if (cleanDSMLTags(tail.content) === '') {
+      tail.content =
+        finalResult.content ||
+        '（模型已完成上述工具调用，但未返回可显示的文本总结。可再追问一次，或把需求说得更具体。）';
+    }
     tail.content = cleanDSMLTags(tail.content);
     await scrollToBottom();
     return true;
@@ -1591,11 +1619,11 @@ const currentTypingMsg = computed(() =>
 @keyframes blink { 0%,80%,100% { opacity: .25; } 40% { opacity: 1; } }
 
 /* markdown body */
-.md-content :deep(.chat-p) { margin: 0 0 8px 0; }
+.md-content :deep(.chat-p) { margin: 0 0 8px 0; white-space: pre-wrap; }
 .md-content :deep(.chat-p:last-child) { margin-bottom: 0; }
 .md-content :deep(.chat-report-title) { font-weight: 600; color: var(--primary-color); margin: 4px 0 8px; }
-.md-content :deep(.chat-report-content) { padding-left: 12px; border-left: 2px solid color-mix(in srgb, var(--primary-color) 28%, transparent); }
-.md-content :deep(.chat-subline) { color: var(--text-secondary); padding-left: 8px; }
+.md-content :deep(.chat-report-content) { padding-left: 12px; border-left: 2px solid color-mix(in srgb, var(--primary-color) 28%, transparent); white-space: pre-wrap; }
+.md-content :deep(.chat-subline) { color: var(--text-secondary); padding-left: 8px; white-space: pre-wrap; }
 .md-content :deep(.chat-h1), :deep(.chat-h2), :deep(.chat-h3), :deep(.chat-h4) { margin: 10px 0 6px; }
 .md-content :deep(.chat-divider) { border: none; border-top: 1px dashed var(--border-color); margin: 12px 0; }
 .md-content :deep(.chat-inline-code) {

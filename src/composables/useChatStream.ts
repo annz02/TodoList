@@ -115,14 +115,34 @@ export function useChatStream() {
     });
 
     if (!response.ok) {
-      let msg = `HTTP ${response.status}`;
-      try {
-        const err = await response.json();
-        msg = err?.error?.message || msg;
-      } catch {
-        /* ignore */
+      let msg = '';
+      // Model providers may return JSON errors, but some gateways reply with
+      // plain text (or a body stating HTTP parse) for e.g. a 400. Read both.
+      const bodyText = await response.text().catch(() => '');
+      if (bodyText) {
+        const trimmed = bodyText.replace(/^\s+/, '');
+        if (trimmed.startsWith('{')) {
+          try {
+            const err = JSON.parse(trimmed);
+            msg = err?.error?.message || err?.message || '';
+          } catch {
+            msg = '';
+          }
+        }
+        if (!msg) msg = trimmed.length > 300 ? `${trimmed.slice(0, 300)}…` : trimmed;
       }
-      throw new Error(msg);
+      if (!msg) msg = `HTTP ${response.status}`;
+
+      const statusHint =
+        response.status === 400
+          ? '（HTTP 400：多为请求地址/模型名格式问题，请检查“模型配置”中的请求地址与模型名，或换用服务商支持的模型标识）'
+          : response.status === 401 || response.status === 403
+            ? '（鉴权失败：请检查 API Key 是否正确、是否过期或缺少该模型权限）'
+            : response.status === 429
+              ? '（请求过于频繁或额度不足：HTTP 429，请稍候重试）'
+              : '';
+
+      throw new Error(`${msg}${statusHint}`);
     }
 
     if (!stream) {
