@@ -480,8 +480,20 @@ body {
 
 .dark .sidebar,
 .dark .sidebar .logo-area,
+.dark .sidebar .logo-area span,
 .dark .sidebar .menu-item:not(.active),
+.dark .sidebar .menu-item:not(.active) .left,
+.dark .sidebar .menu-item:not(.active) .menu-icon,
 .dark .sidebar .menu-item:not(.active) .badge {
+  color: #ffffff;
+}
+
+.dark .settings-nav,
+.dark .settings-nav .nav-header,
+.dark .settings-nav .nav-header span,
+.dark .settings-nav .nav-header svg,
+.dark .settings-nav .nav-item:not(.active),
+.dark .settings-nav .nav-item:not(.active) svg {
   color: #ffffff;
 }
 

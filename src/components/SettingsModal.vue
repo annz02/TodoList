@@ -702,23 +702,46 @@ const handleManualCheck = async () => {
   color: var(--primary-color);
 }
 
-:global(.dark) .nav-header {
-  color: #ffffff;
-}
-
-:global(.dark) .nav-item:not(.active) {
-  color: #ffffff;
-}
-
-:global(.dark) .nav-item:hover:not(.active) {
-  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
-  color: var(--primary-color);
-}
-
 .nav-item.active {
   background: var(--primary-light);
   color: var(--primary-color);
   font-weight: 600;
+}
+
+/* 深色模式下的设置左侧面板文字及图标为白色 */
+:global(.dark) .settings-nav {
+  color: #ffffff;
+}
+
+:global(.dark) .settings-nav .nav-header {
+  color: #ffffff;
+}
+
+:global(.dark) .settings-nav .nav-item {
+  color: #ffffff;
+}
+
+:global(.dark) .settings-nav .nav-item svg {
+  color: #ffffff;
+}
+
+:global(.dark) .settings-nav .nav-item:hover:not(.active) {
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  color: var(--primary-color);
+}
+
+:global(.dark) .settings-nav .nav-item:hover:not(.active) svg {
+  color: var(--primary-color);
+}
+
+:global(.dark) .settings-nav .nav-item.active {
+  background: color-mix(in srgb, var(--primary-color) 22%, rgba(255, 255, 255, 0.05));
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+:global(.dark) .settings-nav .nav-item.active svg {
+  color: var(--primary-color);
 }
 
 /* 右侧 Main Content */
