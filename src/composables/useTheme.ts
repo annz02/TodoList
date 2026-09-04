@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
-const themeMode = ref(localStorage.getItem('themeMode') || 'light');
+const themeMode = ref(localStorage.getItem('themeMode') || 'system');
 const primaryColor = ref(localStorage.getItem('primaryColor') || '#3b82f6');
 
 export function useTheme() {
@@ -13,8 +13,17 @@ export function useTheme() {
     '#ec4899', // Pink
   ];
 
+  const getIsDark = () => {
+    if (themeMode.value === 'dark') return true;
+    if (themeMode.value === 'light') return false;
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  };
+
   const applyTheme = () => {
-    if (themeMode.value === 'dark') {
+    if (getIsDark()) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
@@ -75,4 +84,24 @@ export function useTheme() {
     setThemeMode,
     setPrimaryColor
   };
+}
+
+// 监听系统深色/浅色模式切换
+if (typeof window !== 'undefined' && window.matchMedia) {
+  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  const handleSystemThemeChange = () => {
+    if (themeMode.value === 'system') {
+      const isDark = mediaQuery.matches;
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+  };
+  if (mediaQuery.addEventListener) {
+    mediaQuery.addEventListener('change', handleSystemThemeChange);
+  } else if ((mediaQuery as any).addListener) {
+    (mediaQuery as any).addListener(handleSystemThemeChange);
+  }
 }

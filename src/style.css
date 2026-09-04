@@ -169,9 +169,14 @@ body {
   vertical-align: middle;
 }
 
-.menu-item:hover {
-  background-color: #f1f5f9;
-  color: var(--text-main);
+.menu-item:hover:not(.active) {
+  background-color: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  color: var(--primary-color);
+}
+
+.menu-item:hover:not(.active) .badge {
+  background-color: color-mix(in srgb, var(--primary-color) 15%, transparent);
+  color: var(--primary-color);
 }
 
 .menu-item.active {
@@ -473,7 +478,12 @@ body {
   background-color: var(--primary-light);
 }
 
-.dark .menu-item:hover, .dark .task-right .action-btn:hover {
+.dark .menu-item:hover:not(.active) {
+  background-color: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  color: var(--primary-color);
+}
+
+.dark .task-right .action-btn:hover {
   background-color: #334155;
 }
 

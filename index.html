@@ -8,9 +8,17 @@
     <script>
       (function () {
         try {
-          var mode = localStorage.getItem('themeMode');
+          var mode = localStorage.getItem('themeMode') || 'system';
           var color = localStorage.getItem('primaryColor');
+          var isDark = false;
           if (mode === 'dark') {
+            isDark = true;
+          } else if (mode === 'light') {
+            isDark = false;
+          } else {
+            isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          }
+          if (isDark) {
             document.documentElement.classList.add('dark');
           } else {
             document.documentElement.classList.remove('dark');

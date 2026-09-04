@@ -213,18 +213,59 @@ const handleManualCheck = async () => {
           <div class="content-body">
             <!-- 通用页签内容 -->
             <div v-if="activeTab === 'general'" class="tab-panel general-panel">
-              <!-- 深色模式设置 -->
+              <!-- 界面主题设置 -->
               <div class="setting-card">
                 <div class="setting-row">
                   <div class="setting-info">
-                    <span class="card-title" style="margin:0;">深色模式</span>
+                    <span class="card-title" style="margin:0;">界面主题</span>
                   </div>
-                  <div 
-                    class="toggle-switch" 
-                    :class="{ active: themeMode === 'dark' }" 
-                    @click.stop="setThemeMode(themeMode === 'dark' ? 'light' : 'dark')"
-                  >
-                    <div class="toggle-knob"></div>
+                  <div class="theme-mode-segmented">
+                    <button 
+                      type="button"
+                      class="theme-mode-btn"
+                      :class="{ active: themeMode === 'system' }" 
+                      @click.stop="setThemeMode('system')"
+                      title="跟随系统"
+                    >
+                      <svg class="mode-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2.2L15.14 4.42L18.93 5.07L19.58 8.86L21.8 12L19.58 15.14L18.93 18.93L15.14 19.58L12 21.8L8.86 19.58L5.07 18.93L4.42 15.14L2.2 12L4.42 8.86L5.07 5.07L8.86 4.42Z" stroke-width="1.8"></path>
+                        <path d="M8.6 15.8L12 8.2L15.4 15.8" stroke-width="2.1"></path>
+                        <path d="M9.7 13.4H14.3" stroke-width="2.1"></path>
+                      </svg>
+                      <span>跟随系统</span>
+                    </button>
+                    <button 
+                      type="button"
+                      class="theme-mode-btn"
+                      :class="{ active: themeMode === 'light' }" 
+                      @click.stop="setThemeMode('light')"
+                      title="浅色"
+                    >
+                      <svg class="mode-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="4"></circle>
+                        <path d="M12 2v2"></path>
+                        <path d="M12 20v2"></path>
+                        <path d="m4.93 4.93 1.41 1.41"></path>
+                        <path d="m17.66 17.66 1.41 1.41"></path>
+                        <path d="M2 12h2"></path>
+                        <path d="M20 12h2"></path>
+                        <path d="m6.34 17.66-1.41 1.41"></path>
+                        <path d="m19.07 4.93-1.41 1.41"></path>
+                      </svg>
+                      <span>浅色</span>
+                    </button>
+                    <button 
+                      type="button"
+                      class="theme-mode-btn"
+                      :class="{ active: themeMode === 'dark' }" 
+                      @click.stop="setThemeMode('dark')"
+                      title="深色"
+                    >
+                      <svg class="mode-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+                      </svg>
+                      <span>深色</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -657,8 +698,13 @@ const handleManualCheck = async () => {
 }
 
 .nav-item:hover:not(.active) {
-  background: var(--bg-main);
-  color: var(--text-main);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+  color: var(--primary-color);
+}
+
+:global(.dark) .nav-item:hover:not(.active) {
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  color: var(--primary-color);
 }
 
 .nav-item.active {
@@ -807,6 +853,83 @@ const handleManualCheck = async () => {
   color: var(--text-muted);
   line-height: 1.2;
 }
+
+/* 界面主题分段选择器 */
+.theme-mode-segmented {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 9999px;
+  padding: 3px;
+  position: relative;
+  user-select: none;
+}
+
+.theme-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 9999px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.theme-mode-btn:not(:first-child)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 22%;
+  width: 1px;
+  background-color: var(--border-color);
+  transition: opacity 0.15s;
+}
+
+.theme-mode-btn.active::before,
+.theme-mode-btn.active + .theme-mode-btn::before,
+.theme-mode-btn:hover::before,
+.theme-mode-btn:hover + .theme-mode-btn::before {
+  opacity: 0;
+}
+
+.theme-mode-btn .mode-icon {
+  flex-shrink: 0;
+  stroke: currentColor;
+}
+
+.theme-mode-btn:hover:not(.active) {
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+}
+
+:global(.dark) .theme-mode-btn:hover:not(.active) {
+  color: var(--primary-color);
+  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
+}
+
+.theme-mode-btn.active {
+  background: var(--primary-light, color-mix(in srgb, var(--primary-color) 14%, transparent));
+  color: var(--primary-color);
+  font-weight: 600;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--primary-color) 18%, transparent), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+:global(.dark) .theme-mode-btn.active {
+  background: color-mix(in srgb, var(--primary-color) 22%, rgba(255, 255, 255, 0.05));
+  color: var(--primary-color);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--primary-color) 35%, transparent);
+}
+
+
 
 /* Color Palette */
 .color-palette {
