@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import type { Todo } from '../types';
 import DateTimePicker from './DateTimePicker.vue';
 import { selectFolder } from '../utils/filePicker';
+import { parsePathDisplay, openInEditor, openRemoteLink, copyToClipboard } from '../utils/pathUtils';
 
 const props = defineProps<{ task: Todo; isSelected?: boolean }>();
 const emit = defineEmits<{
@@ -18,6 +19,33 @@ const editCategory = ref('');
 const editGitUrl = ref('');
 const editStartTime = ref('');
 const editDueDate = ref('');
+
+const isPathCopied = ref(false);
+let copyTimer: any = null;
+
+const parsedGitInfo = computed(() => {
+  return parsePathDisplay(props.task.gitUrl);
+});
+
+const handleCopyPath = async (pathStr?: string) => {
+  if (!pathStr) return;
+  const ok = await copyToClipboard(pathStr);
+  if (ok) {
+    isPathCopied.value = true;
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => {
+      isPathCopied.value = false;
+    }, 1500);
+  }
+};
+
+const handleOpenRemote = (pathStr?: string) => {
+  if (pathStr) openRemoteLink(pathStr);
+};
+
+const handleOpenEditor = (pathStr?: string) => {
+  if (pathStr) openInEditor(pathStr);
+};
 
 const handleSelectFolder = async () => {
   const folder = await selectFolder();
@@ -219,7 +247,43 @@ const displayDueDate = computed(() => {
             <path d="M18 9a9 9 0 0 1-9 9"></path>
           </svg>
           <span class="time-label">代码路径</span>
-          <span class="git-path-tag" :title="task.gitUrl">{{ task.gitUrl }}</span>
+          <div 
+            class="git-path-badge" 
+            :title="isPathCopied ? '已复制完整路径！' : `点击复制路径: ${task.gitUrl}`"
+          >
+            <div class="git-path-content" @click.stop="handleCopyPath(task.gitUrl)">
+              <span class="path-project-name">{{ parsedGitInfo.projectName }}</span>
+              <span v-if="isPathCopied" class="copied-hint">已复制</span>
+            </div>
+            <div class="git-action-group">
+              <!-- If remote Git link: open in browser -->
+              <button 
+                v-if="parsedGitInfo.isRemote" 
+                class="git-action-btn" 
+                @click.stop="handleOpenRemote(task.gitUrl)" 
+                title="在浏览器中打开链接"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+              </button>
+
+              <!-- If local directory: open in VS Code -->
+              <button 
+                v-else
+                class="git-action-btn code-editor-btn" 
+                @click.stop="handleOpenEditor(task.gitUrl)" 
+                title="在 VS Code 中打开"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="16 18 22 12 16 6"></polyline>
+                  <polyline points="8 6 2 12 8 18"></polyline>
+                </svg>
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="time-row">
@@ -265,16 +329,17 @@ const displayDueDate = computed(() => {
             <path d="M18 9a9 9 0 0 1-9 9"></path>
           </svg>
           <span class="time-label">代码路径</span>
-          <div class="folder-select-trigger" @click="handleSelectFolder" :title="editGitUrl || '选择代码路径'">
+          <div class="folder-select-trigger" :class="{ 'has-value': !!editGitUrl }" @click="handleSelectFolder" :title="editGitUrl ? `代码路径: ${editGitUrl}` : '选择代码路径'">
             <span class="folder-path" :class="{ placeholder: !editGitUrl }">
-              {{ editGitUrl || '选择代码路径' }}
+              {{ editGitUrl ? (parsePathDisplay(editGitUrl).projectName || editGitUrl) : '选择代码路径' }}
             </span>
-            <button v-if="editGitUrl" type="button" class="clear-folder-btn" @click.stop="editGitUrl = ''" title="清除路径">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
+            <svg v-if="editGitUrl" class="clear-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" @click.stop="editGitUrl = ''" title="清除">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            <svg v-else class="arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
           </div>
         </div>
 
@@ -526,90 +591,148 @@ const displayDueDate = computed(() => {
   color: #f97316;
 }
 
-.git-path-tag {
-  display: inline-block;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12.5px;
-  color: var(--text-secondary);
-}
-
-.git-input {
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: 13.5px;
-  font-weight: 400;
-  color: var(--text-main);
-  padding: 0;
-  height: 26px;
-  box-sizing: border-box;
-  flex: 1;
-  min-width: 0;
-  max-width: 220px;
-}
-
-.git-input::placeholder {
-  color: var(--text-muted);
-  font-weight: 400;
-  font-size: 13px;
-}
-
-.folder-select-trigger {
-  display: flex;
+.git-path-badge {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  cursor: pointer;
-  padding: 2px 6px;
+  background-color: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  padding: 1px 6px 1px 8px;
   border-radius: 6px;
-  height: 26px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  color: var(--text-main);
+  max-width: calc(100% - 85px);
+  min-width: 0;
   box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.git-path-badge:hover {
+  border-color: var(--primary-color);
+  background-color: color-mix(in srgb, var(--primary-color) 6%, var(--bg-sidebar));
+}
+
+.git-path-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
   min-width: 0;
   flex: 1;
-  transition: background-color 0.2s;
-  user-select: none;
 }
 
-.folder-select-trigger:hover {
-  background-color: var(--bg-sidebar);
-}
-
-.folder-path {
-  font-size: 13.5px;
-  font-weight: 500;
+.path-project-name {
+  font-weight: 600;
   color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: 1;
-  min-width: 0;
 }
 
-.folder-path.placeholder {
-  color: var(--text-muted);
-  font-weight: 400;
+.copied-hint {
+  font-size: 11px;
+  color: #10b981;
+  font-weight: 600;
+  margin-left: 4px;
+  animation: badgeFadeIn 0.15s ease;
 }
 
-.clear-folder-btn {
+@keyframes badgeFadeIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.git-action-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0.85;
+  transition: opacity 0.2s;
+}
+
+.git-path-badge:hover .git-action-group {
+  opacity: 1;
+}
+
+.git-action-btn {
   background: transparent;
   border: none;
+  padding: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2px;
-  border-radius: 50%;
   color: var(--text-muted);
   cursor: pointer;
-  flex-shrink: 0;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
 }
 
-.clear-folder-btn:hover {
+.git-action-btn:hover {
+  color: var(--text-main);
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+:global(.dark) .git-action-btn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.folder-select-trigger,
+:deep(.picker-trigger) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: 6px;
+  height: 26px;
+  box-sizing: border-box;
+  width: 140px;
+  background-color: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.folder-select-trigger:hover,
+:deep(.picker-trigger:hover) {
+  border-color: var(--primary-color);
+  background-color: color-mix(in srgb, var(--primary-color) 6%, var(--bg-sidebar));
+}
+
+.folder-path {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.folder-select-trigger.has-value .folder-path {
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.arrow-icon, .clear-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  transition: transform 0.2s, color 0.2s;
+  margin-left: 2px;
+  flex-shrink: 0;
+}
+
+.clear-icon:hover {
   color: var(--danger-color);
-  background-color: rgba(239, 68, 68, 0.15);
 }
 
 .time-label {

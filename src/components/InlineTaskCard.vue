@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import DateTimePicker from './DateTimePicker.vue';
 import { selectFolder } from '../utils/filePicker';
+import { parsePathDisplay } from '../utils/pathUtils';
 
 const props = defineProps<{
   initialStartTime?: string;
@@ -136,16 +137,17 @@ onUnmounted(() => {
           <path d="M18 9a9 9 0 0 1-9 9"></path>
         </svg>
         <span class="time-label">代码路径</span>
-        <div class="folder-select-trigger" @click="handleSelectFolder" :title="gitUrl || '选择代码路径'">
+        <div class="folder-select-trigger" :class="{ 'has-value': !!gitUrl }" @click="handleSelectFolder" :title="gitUrl ? `代码路径: ${gitUrl}` : '选择代码路径'">
           <span class="folder-path" :class="{ placeholder: !gitUrl }">
-            {{ gitUrl || '选择代码路径' }}
+            {{ gitUrl ? (parsePathDisplay(gitUrl).projectName || gitUrl) : '选择代码路径' }}
           </span>
-          <button v-if="gitUrl" type="button" class="clear-folder-btn" @click.stop="gitUrl = ''" title="清除路径">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
+          <svg v-if="gitUrl" class="clear-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" @click.stop="gitUrl = ''" title="清除">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+          <svg v-else class="arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
         </div>
       </div>
 
@@ -365,29 +367,33 @@ onUnmounted(() => {
   font-size: 13.5px;
 }
 
-.folder-select-trigger {
-  display: flex;
+.folder-select-trigger,
+:deep(.picker-trigger) {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: 4px;
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 2px 8px;
   border-radius: 6px;
   height: 26px;
   box-sizing: border-box;
-  min-width: 0;
-  flex: 1;
-  transition: background-color 0.2s;
+  width: 140px;
+  background-color: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  transition: all 0.2s;
   user-select: none;
 }
 
-.folder-select-trigger:hover {
-  background-color: var(--bg-sidebar);
+.folder-select-trigger:hover,
+:deep(.picker-trigger:hover) {
+  border-color: var(--primary-color);
+  background-color: color-mix(in srgb, var(--primary-color) 6%, var(--bg-sidebar));
 }
 
 .folder-path {
-  font-size: 13.5px;
-  font-weight: 500;
-  color: var(--text-main);
+  font-size: 13px;
+  color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -395,35 +401,22 @@ onUnmounted(() => {
   min-width: 0;
 }
 
-.folder-path.placeholder {
-  color: var(--text-muted);
-  font-weight: 400;
+.folder-select-trigger.has-value .folder-path {
+  color: var(--text-main);
+  font-weight: 500;
 }
 
-.clear-folder-btn {
-  background: transparent;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px;
-  border-radius: 50%;
+.arrow-icon, .clear-icon {
+  width: 14px;
+  height: 14px;
   color: var(--text-muted);
-  cursor: pointer;
+  transition: transform 0.2s, color 0.2s;
+  margin-left: 2px;
   flex-shrink: 0;
-  transition: all 0.2s;
 }
 
-.clear-folder-btn:hover {
+.clear-icon:hover {
   color: var(--danger-color);
-  background-color: rgba(239, 68, 68, 0.15);
-}
-
-:deep(.picker-trigger) {
-  padding: 2px 8px;
-  height: 26px;
-  font-size: 13.5px;
-  box-sizing: border-box;
 }
 
 /* Dark mode overrides */

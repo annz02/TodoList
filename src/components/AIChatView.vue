@@ -32,7 +32,6 @@ const {
   tavilyApiKey,
   bochaApiKey,
   setActiveModel,
-  setWebSearch,
 } = useAIConfig();
 const { sendChat } = useChatStream();
 const { search, fetchWebpage } = useWebSearch();
@@ -501,10 +500,6 @@ const openUrl = async (url: string) => {
   } catch {
     window.open(raw, '_blank');
   }
-};
-
-const toggleWebSearch = () => {
-  setWebSearch(!webSearch.value);
 };
 
 // Conversation roster lives in the module-singleton useConversations store so
@@ -1629,22 +1624,6 @@ const currentTypingMsg = computed(() =>
                   </div>
                 </div>
               </div>
-
-              <!-- Web Search toggle chip -->
-              <button
-                type="button"
-                class="web-search-chip"
-                :class="{ active: webSearch }"
-                :title="webSearch ? '联网检索已开启（点击可关闭）' : '联网检索已关闭（点击开启）'"
-                @click="toggleWebSearch"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="2" y1="12" x2="22" y2="12"></line>
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                </svg>
-                <span>联网搜索</span>
-              </button>
             </div>
 
             <!-- Circular arrow send / stop -->
@@ -2212,39 +2191,12 @@ const currentTypingMsg = computed(() =>
 }
 
 
-/* Left group in chat-controls (model selector + web search toggle) */
+/* Left group in chat-controls (model selector) */
 .control-left-group {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-}
-
-/* Web Search toggle chip */
-.web-search-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: 9px;
-  color: var(--text-muted);
-  padding: 5px 9px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all .18s ease;
-  user-select: none;
-}
-.web-search-chip:hover {
-  color: var(--primary-color);
-  border-color: color-mix(in srgb, var(--primary-color) 40%, transparent);
-  background: color-mix(in srgb, var(--primary-color) 6%, transparent);
-}
-.web-search-chip.active {
-  color: var(--primary-color);
-  background: var(--primary-light);
-  border-color: color-mix(in srgb, var(--primary-color) 35%, transparent);
-  font-weight: 500;
 }
 
 /* Antigravity Agent Execution Steps */

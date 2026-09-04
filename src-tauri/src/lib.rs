@@ -175,6 +175,82 @@ fn open_url(url: String) -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+fn open_path_in_explorer(path: String) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("路径不能为空".into());
+    }
+    let p = std::path::Path::new(trimmed);
+    if !p.exists() {
+        return Err(format!("路径不存在: {}", trimmed));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .creation_flags(CREATE_NO_WINDOW)
+            .arg(trimmed)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(trimmed)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(trimmed)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+}
+
+#[tauri::command]
+fn open_path_in_editor(path: String) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("路径不能为空".into());
+    }
+    let p = std::path::Path::new(trimmed);
+    if !p.exists() {
+        return Err(format!("路径不存在: {}", trimmed));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .creation_flags(CREATE_NO_WINDOW)
+            .args(["/c", "code", trimmed])
+            .spawn()
+            .map_err(|e| format!("无法启动 VS Code，请确认已安装并加入 PATH: {}", e))?;
+        Ok(())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("code")
+            .arg(trimmed)
+            .spawn()
+            .map_err(|e| format!("无法启动 VS Code: {}", e))?;
+        Ok(())
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("code")
+            .arg(trimmed)
+            .spawn()
+            .map_err(|e| format!("无法启动 VS Code: {}", e))?;
+        Ok(())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   #[cfg(target_os = "windows")]
@@ -198,6 +274,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
         save_todos, load_todos, save_settings, load_settings,
         get_git_commits, select_folder, open_url,
+        open_path_in_explorer, open_path_in_editor,
         search::web_search,
         search::fetch_webpage,
         search::ai_chat_proxy,

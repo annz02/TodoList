@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import { selectFolder } from '../utils/filePicker';
+import { parsePathDisplay } from '../utils/pathUtils';
 
 const props = defineProps<{ 
   show: boolean;
@@ -16,6 +18,13 @@ const gitUrl = ref('');
 const titleError = ref('');
 const dateTimeError = ref('');
 const dateTime = ref('');
+
+const handleSelectFolder = async () => {
+  const folder = await selectFolder();
+  if (folder) {
+    gitUrl.value = folder;
+  }
+};
 
 watch(() => props.show, (newVal) => {
   if (newVal) {
@@ -118,8 +127,16 @@ const handleSave = () => {
               <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
               <span>关联项目目录 (Git)</span>
             </div>
-            <div class="input-with-action">
-              <input type="text" placeholder="本地代码库绝对路径" v-model="gitUrl" />
+            <div class="modal-folder-trigger" @click="handleSelectFolder" :title="gitUrl ? `代码路径: ${gitUrl}` : '点击选择文件夹'">
+              <span class="modal-folder-name" :class="{ placeholder: !gitUrl }">
+                {{ gitUrl ? (parsePathDisplay(gitUrl).projectName || gitUrl) : '点击选择文件夹...' }}
+              </span>
+              <button v-if="gitUrl" type="button" class="modal-clear-btn" @click.stop="gitUrl = ''" title="清除路径">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -354,6 +371,63 @@ const handleSave = () => {
 }
 .row-card .card-title {
   margin: 0;
+}
+
+.modal-folder-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0 12px;
+  height: 40px;
+  background: var(--bg-main);
+  transition: all 0.2s;
+  width: 140px;
+  box-sizing: border-box;
+  cursor: pointer;
+  user-select: none;
+}
+
+.modal-folder-trigger:hover {
+  border-color: var(--primary-color);
+  background-color: var(--bg-sidebar);
+}
+
+.modal-folder-name {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.modal-folder-name.placeholder {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.modal-clear-btn {
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border-radius: 50%;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.modal-clear-btn:hover {
+  color: var(--danger-color);
+  background-color: rgba(239, 68, 68, 0.15);
 }
 .custom-dropdown {
   position: relative;
