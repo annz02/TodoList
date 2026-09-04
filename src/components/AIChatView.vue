@@ -1213,19 +1213,19 @@ const currentTypingMsg = computed(() =>
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--primary-color);
   border-radius: 4px;
   cursor: pointer;
   flex-shrink: 0;
-  opacity: 0.7;
+  opacity: 0.75;
   transition: all .15s ease;
 }
 .hist-item:hover .hist-item-delete {
   opacity: 1;
 }
 .hist-item-delete:hover {
-  background: color-mix(in srgb, var(--danger-color, #ef4444) 18%, transparent);
-  color: var(--danger-color, #ef4444) !important;
+  background: var(--primary-light);
+  color: var(--primary-color);
 }
 
 

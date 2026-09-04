@@ -749,17 +749,18 @@ const handleManualCheck = async () => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 20px 24px;
-  overflow-y: auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
 }
 
 .content-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
-  padding-bottom: 12px;
+  padding: 20px 24px 14px 24px;
   border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .content-title {
@@ -785,6 +786,13 @@ const handleManualCheck = async () => {
 .close-icon-btn:hover {
   background: var(--bg-sidebar);
   color: var(--text-main);
+}
+
+.content-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 24px 20px 24px;
 }
 
 .tab-panel {
@@ -1166,19 +1174,24 @@ const handleManualCheck = async () => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: transparent;
-  border: 1px dashed var(--primary-color);
-  color: var(--primary-color);
+  background-color: var(--primary-color);
+  color: #ffffff;
+  border: none;
   font-size: 12px;
   font-weight: 500;
   padding: 3px 8px;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.18s ease;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  white-space: nowrap;
 }
 
 .ai-add-btn:hover {
-  background: var(--primary-light);
+  background-color: var(--primary-hover);
+}
+
+.ai-add-btn:active {
+  transform: scale(0.98);
 }
 
 .ai-models-list {
