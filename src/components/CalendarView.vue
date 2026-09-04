@@ -20,14 +20,12 @@ const emit = defineEmits<{
   (e: 'save-inline', data: { title: string; category?: string; startTime: string; dueDate: string; gitUrl?: string }): void;
   (e: 'cancel-inline'): void;
   (e: 'open-create', initialStartTime?: string): void;
-  (e: 'switch-to-list'): void;
 }>();
 
 // Date State
 const now = new Date();
 const currentYear = ref(now.getFullYear());
 const currentMonth = ref(now.getMonth()); // 0-11
-const viewType = ref<'month' | 'list'>('month');
 
 const getTodayDateStr = () => {
   const y = now.getFullYear();
@@ -67,14 +65,6 @@ const nextMonth = () => {
     currentYear.value++;
   } else {
     currentMonth.value++;
-  }
-};
-
-const handleViewTypeChange = (type: 'month' | 'list') => {
-  if (type === 'list') {
-    emit('switch-to-list');
-  } else {
-    viewType.value = type;
   }
 };
 
@@ -300,13 +290,6 @@ const weekdaysHeader = [
             </button>
           </div>
           <span class="month-title">{{ currentYear }}年 {{ currentMonth + 1 }}月</span>
-        </div>
-
-        <div class="right-actions">
-          <div class="view-switch-pills">
-            <button class="pill-btn active" @click="handleViewTypeChange('month')">月视图</button>
-            <button class="pill-btn" @click="handleViewTypeChange('list')">列表视图</button>
-          </div>
         </div>
       </div>
 
@@ -567,45 +550,6 @@ const weekdaysHeader = [
   color: var(--text-main);
   margin-left: 4px;
   white-space: nowrap;
-}
-
-/* Right Actions Toolbar */
-.right-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.view-switch-pills {
-  display: flex;
-  background: var(--bg-main);
-  padding: 3px;
-  border-radius: 10px;
-  border: 1px solid var(--border-color);
-  gap: 2px;
-}
-
-.pill-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  padding: 4px 10px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.pill-btn:hover {
-  color: var(--text-main);
-}
-
-.pill-btn.active {
-  background: var(--primary-color);
-  color: #ffffff;
-  font-weight: 600;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color) 35%, transparent);
 }
 
 /* Wrapper for Grid to Ensure Responsive Proportions */

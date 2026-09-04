@@ -644,7 +644,6 @@ const handleUpdateTaskFromAI = (data: {
       @save-inline="handleInlineSave"
       @cancel-inline="showInlineCreate = false"
       @open-create="handleAddTaskClick"
-      @switch-to-list="activeCategory = 'all'"
     />
 
     <div v-else-if="activeCategory === 'ai-chat'" class="ai-chat-page">
