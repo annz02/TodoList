@@ -141,6 +141,16 @@ body {
   gap: 12px;
 }
 
+.menu-icon {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  flex-shrink: 0;
+  display: inline-block;
+  vertical-align: middle;
+}
+
 .menu-item:hover {
   background-color: #f1f5f9;
   color: var(--text-main);

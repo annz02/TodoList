@@ -256,7 +256,6 @@ const activeModelName = computed(() => connection.value.model);
 const input = ref('');
 const isWaiting = ref(false);
 const abortCtrl = ref<AbortController | null>(null);
-const isReportRunning = ref(false);
 
 const openSourceMsgIds = ref<number[]>([]);
 const toggleSources = (msgId: number) => {
@@ -787,44 +786,6 @@ const stopGenerating = () => {
   abortCtrl.value?.abort();
 };
 
-// ---------- Daily report ----------
-const generateDailyReport = async () => {
-  if (isReportRunning.value || isWaiting.value) return;
-  isReportRunning.value = true;
-  try {
-    await assistant.fetchGitCommits();
-    await scrollToBottom();
-
-    if (apiKey.value.trim()) {
-      // Ask the model using the structured data. The detailed task/commit data
-      // prompt is fed to the model via extraContext (not shown to avoid a wall of
-      // internal text); the visible user bubble stays short.
-      messages.value.push({ id: nextMessageId(), role: 'user', content: '请帮我生成今天的 AI 工作日报' });
-      refreshConversationTitle();
-      const tail = { id: nextMessageId(), role: 'assistant' as const, content: '' };
-      messages.value.push(tail);
-      await scrollToBottom();
-      const ok = await streamInto(tail, [{ role: 'user', content: assistant.buildDataPrompt() }]);
-      if (!ok) {
-        // Fall back to built-in so the user still gets something.
-        tail.content = `\n\n> 在线生成失败，下面是内置规则生成的日报：\n\n` + assistant.builtInSummary();
-        await scrollToBottom();
-      }
-      return;
-    }
-
-    // No key => offline built-in summary.
-    const summary = assistant.builtInSummary();
-    messages.value.push({ id: nextMessageId(), role: 'user', content: '请为我生成今天的 AI 工作日报' });
-    messages.value.push({ id: nextMessageId(), role: 'assistant', content: `📋 已根据内置规则为您生成今日工作日报：\n\n${summary}` });
-    await scrollToBottom();
-  } catch (err: any) {
-    console.error('生成日报失败：', err);
-  } finally {
-    isReportRunning.value = false;
-  }
-};
-
 // ---------- Per-message copy ----------
 // Id of the message whose copy check-mark is currently shown.
 const copiedMsgId = ref<number | null>(null);
@@ -847,14 +808,14 @@ const copyMessage = async (msg: LocalMsg) => {
 const historyOpen = ref(false);
 
 const startNewConversation = () => {
-  if (isWaiting.value || isReportRunning.value) return;
+  if (isWaiting.value) return;
   conversations.newConversation();
   historyOpen.value = false;
   nextTick(() => scrollToBottom());
 };
 
 const switchConversation = (id: string) => {
-  if (isWaiting.value || isReportRunning.value) return;
+  if (isWaiting.value) return;
   conversations.selectConversation(id);
   historyOpen.value = false;
   nextTick(() => scrollToBottom());
@@ -876,23 +837,14 @@ const currentTypingMsg = computed(() =>
   <div class="ai-chat">
     <!-- Toolbar -->
     <div class="chat-toolbar">
-      <button
-        class="tool-btn report-btn"
-        :disabled="isReportRunning || isWaiting"
-        @click="generateDailyReport"
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-        {{ isReportRunning ? '生成中…' : '今日工作日报' }}
-      </button>
-
-      <div class="toolbar-actions">
+      <div class="toolbar-actions" style="margin-left: auto;">
         <!-- Conversation history -->
         <div class="hist-wrap">
           <button
             class="tool-btn icon"
             :class="{ active: historyOpen }"
             title="历史记录"
-            :disabled="isWaiting || isReportRunning"
+            :disabled="isWaiting"
             @click="historyOpen = !historyOpen"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline><polyline points="12 7 12 12 15 15"></polyline></svg>
@@ -904,7 +856,7 @@ const currentTypingMsg = computed(() =>
               <button
                 type="button"
                 class="hist-new"
-                :disabled="isWaiting || isReportRunning"
+                :disabled="isWaiting"
                 @click="startNewConversation"
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -942,8 +894,20 @@ const currentTypingMsg = computed(() =>
         <div class="chat-messages">
           <div v-for="msg in messages" :key="msg.id" class="msg-row" :class="msg.role">
             <div class="avatar" :class="msg.role">
-              <svg v-if="msg.role === 'assistant'" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="9" width="16" height="11" rx="3"></rect><line x1="9" y1="9" x2="9" y2="5.5"></line><line x1="15" y1="9" x2="15" y2="5.5"></line><circle cx="9" cy="4" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="15" cy="4" r="1.2" fill="currentColor" stroke="none"></circle><circle cx="9" cy="14.5" r="1.3" fill="currentColor" stroke="none"></circle><circle cx="15" cy="14.5" r="1.3" fill="currentColor" stroke="none"></circle></svg>
-              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+              <!-- 精致现代 Bot 机器人头像 -->
+              <svg v-if="msg.role === 'assistant'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 8V4H8"></path>
+                <rect width="16" height="12" x="4" y="8" rx="2"></rect>
+                <path d="M2 14h2"></path>
+                <path d="M20 14h2"></path>
+                <path d="M15 13v2"></path>
+                <path d="M9 13v2"></path>
+              </svg>
+              <!-- 优雅现代 User 用户头像 -->
+              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
             </div>
             <div class="bubble" :class="msg.role">
               <template v-if="msg.role === 'assistant'">
@@ -1125,10 +1089,9 @@ const currentTypingMsg = computed(() =>
 .chat-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 6px;
 }
 .tool-btn {
   display: inline-flex;
@@ -1143,18 +1106,10 @@ const currentTypingMsg = computed(() =>
   cursor: pointer;
   transition: all .18s ease;
 }
-.report-btn {
-  background: var(--primary-light);
-  border-color: transparent;
-  color: var(--primary-color);
-  font-weight: 600;
-}
-.report-btn:hover:not(:disabled) { color: var(--primary-color); border-color: var(--primary-color); }
 .tool-btn:hover:not(:disabled) { color: var(--primary-color); border-color: var(--primary-color); }
 .tool-btn:disabled { opacity: .6; cursor: not-allowed; }
 .tool-btn.icon { padding: 6px; }
 .toolbar-actions { display: flex; gap: 6px; }
-.tool-btn:disabled { cursor: not-allowed; opacity: .6; }
 
 /* Conversation history popover */
 .hist-wrap { position: relative; }

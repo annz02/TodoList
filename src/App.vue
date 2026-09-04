@@ -601,7 +601,7 @@ const closeWindow = () => getCurrentWindow().close();
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
       </button>
     </div>
-    <header class="header">
+    <header class="header" :class="{ 'ai-chat-mode': activeCategory === 'ai-chat' }">
       <div class="header-left" data-tauri-drag-region style="flex-grow: 1; z-index: 10;">
         <div style="pointer-events: none;">
           <h1>
@@ -736,12 +736,24 @@ const closeWindow = () => getCurrentWindow().close();
 </template>
 
 <style scoped>
-/* AI 助手页包装容器：占据 header 之下、主区内的剩余高度 */
+/* AI 助手页顶栏紧凑排版，带有与输入框顶部一致的精致分割横线 */
+.header.ai-chat-mode {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  align-items: center;
+}
+
+.header.ai-chat-mode .header-left h1 {
+  margin-bottom: 0;
+}
+
+/* AI 助手页包装容器：紧凑承接标题，占据剩余全部视口高度 */
 .ai-chat-page {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  margin-top: 0.5rem;
+  margin-top: 0;
 }
 </style>
