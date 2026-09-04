@@ -151,16 +151,8 @@ onUnmounted(() => {
 
       <div class="time-row">
         <svg class="calendar-icon blue" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-          <line x1="16" y1="2" x2="16" y2="6"></line>
-          <line x1="8" y1="2" x2="8" y2="6"></line>
-          <line x1="3" y1="10" x2="21" y2="10"></line>
-          <circle cx="8" cy="14" r="0.8" fill="currentColor"></circle>
-          <circle cx="12" cy="14" r="0.8" fill="currentColor"></circle>
-          <circle cx="16" cy="14" r="0.8" fill="currentColor"></circle>
-          <circle cx="8" cy="18" r="0.8" fill="currentColor"></circle>
-          <circle cx="12" cy="18" r="0.8" fill="currentColor"></circle>
-          <circle cx="16" cy="18" r="0.8" fill="currentColor"></circle>
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
         </svg>
         <span class="time-label">开始时间</span>
         <DateTimePicker 
@@ -172,16 +164,8 @@ onUnmounted(() => {
 
       <div class="time-row">
         <svg class="calendar-icon green" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-          <line x1="16" y1="2" x2="16" y2="6"></line>
-          <line x1="8" y1="2" x2="8" y2="6"></line>
-          <line x1="3" y1="10" x2="21" y2="10"></line>
-          <circle cx="8" cy="14" r="0.8" fill="currentColor"></circle>
-          <circle cx="12" cy="14" r="0.8" fill="currentColor"></circle>
-          <circle cx="16" cy="14" r="0.8" fill="currentColor"></circle>
-          <circle cx="8" cy="18" r="0.8" fill="currentColor"></circle>
-          <circle cx="12" cy="18" r="0.8" fill="currentColor"></circle>
-          <circle cx="16" cy="18" r="0.8" fill="currentColor"></circle>
+          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+          <line x1="4" y1="22" x2="4" y2="15"></line>
         </svg>
         <span class="time-label">结束时间</span>
         <DateTimePicker 
@@ -340,11 +324,11 @@ onUnmounted(() => {
 }
 
 .calendar-icon.blue {
-  color: var(--primary-color);
+  color: #06b6d4; /* 沉静青蓝 Cyan，代表起始与进行中 */
 }
 
 .calendar-icon.green {
-  color: var(--primary-color);
+  color: #e11d48; /* 醒目红标 Rose/Crimson，代表截止时间与冲刺终点 */
 }
 
 .calendar-icon.git-icon {
