@@ -11,10 +11,14 @@ import { renderMarkdown, cleanDSMLTags } from '../utils/markdown';
 
 const props = defineProps<{ todos: Todo[] }>();
 const emit = defineEmits<{
-  (e: 'create-task', task: { title: string; category?: string; dueDate?: string; startTime?: string; priority?: number }): void;
+  (e: 'create-task', task: { title: string; category?: string; dueDate?: string; startTime?: string; priority?: number; reminderOption?: string; repeatOption?: string }): void;
+  (e: 'batch-create-tasks', tasks: Array<{ title: string; category?: string; dueDate?: string; startTime?: string; priority?: number; reminderOption?: string; repeatOption?: string }>): void;
   (e: 'complete-task', taskTitleOrId: string): void;
+  (e: 'reopen-task', taskTitleOrId: string): void;
   (e: 'delete-task', taskTitleOrId: string): void;
-  (e: 'update-task', data: { taskTitleOrId: string; newTitle?: string; newCategory?: string; newDueDate?: string }): void;
+  (e: 'clear-completed-tasks'): void;
+  (e: 'update-task', data: { taskTitleOrId: string; newTitle?: string; newCategory?: string; newDueDate?: string; newStartTime?: string; newPriority?: number; newReminderOption?: string; newRepeatOption?: string }): void;
+  (e: 'restore-last-deleted', callback?: (res: { count: number; titles: string[] }) => void): void;
   (e: 'open-settings', tab?: 'general' | 'ai' | 'shortcuts'): void;
 }>();
 
@@ -49,7 +53,7 @@ const LOCAL_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'create_task',
-      description: '在用户的 Todolist 中新建一条待办任务。当用户要求创建任务、记录待办或安排日程时调用此工具。',
+      description: '在用户的 Todolist 中新建一条待办任务。前置要求：用户需明确提供开始时间或截止时间（或明确表示不设时间）。若用户尚未提供起止时间，切勿直接调用此工具，应先主动询问用户的起止时间安排。',
       parameters: {
         type: 'object',
         properties: {
@@ -59,15 +63,31 @@ const LOCAL_TOOLS: ToolDefinition[] = [
           },
           category: {
             type: 'string',
-            description: '任务分类，如“工作”、“开发”、“学习”、“生活”等，可根据任务内容推断',
+            description: '任务分类，如“工作”、“开发”、“学习”、“生活”等',
           },
           startTime: {
             type: 'string',
-            description: '任务开始时间，格式为 YYYY-MM-DDTHH:mm（选填，若用户未明确说明，系统将自动默认当前时刻）',
+            description: '任务开始时间，格式为 YYYY-MM-DDTHH:mm（选填，若用户未提供请先询问）',
           },
           dueDate: {
             type: 'string',
-            description: '任务截止时间，格式为 YYYY-MM-DDTHH:mm（如“2026-09-03T18:00”，可结合当前日期推算）',
+            description: '任务截止时间，格式为 YYYY-MM-DDTHH:mm（选填，若用户未提供请先询问）',
+          },
+          priority: {
+            type: 'number',
+            description: '任务优先级（1: 低, 2: 中, 3: 高，选填）',
+          },
+          reminderOption: {
+            type: 'string',
+            description: '提前提醒选项，例如 none/5min/15min/30min/1hour/1day（选填）',
+          },
+          repeatOption: {
+            type: 'string',
+            description: '重复规则，例如 none/daily/workday/weekly/monthly（选填）',
+          },
+          noTimeConfirmed: {
+            type: 'boolean',
+            description: '用户是否已明确说明不需要设置时间/不设时间（选填）',
           },
         },
         required: ['title'],
@@ -77,14 +97,48 @@ const LOCAL_TOOLS: ToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'batch_create_tasks',
+      description: '在 Todolist 中批量一次性新建多条待办任务。前置要求：任务列表中已包含时间信息，或用户已明确确认无需设置时间。若用户未提供时间，请先向用户询问时间安排。',
+      parameters: {
+        type: 'object',
+        properties: {
+          tasks: {
+            type: 'array',
+            description: '待创建的任务列表',
+            items: {
+              type: 'object',
+              properties: {
+                title: { type: 'string', description: '任务标题' },
+                category: { type: 'string', description: '任务分类' },
+                startTime: { type: 'string', description: '开始时间 YYYY-MM-DDTHH:mm' },
+                dueDate: { type: 'string', description: '截止时间 YYYY-MM-DDTHH:mm' },
+                priority: { type: 'number', description: '优先级 1/2/3' },
+                reminderOption: { type: 'string', description: '提醒规则' },
+                repeatOption: { type: 'string', description: '重复规则' },
+              },
+              required: ['title'],
+            },
+          },
+          noTimeConfirmed: {
+            type: 'boolean',
+            description: '用户是否已明确说明不需要设置时间/不设时间（选填）',
+          },
+        },
+        required: ['tasks'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'update_task',
-      description: '修改用户 Todolist 中某项已有任务的标题、分类或截止时间。当用户要求“把xx改名为yy”、“把xx的截止时间改成5点”、“修改xx任务”时调用。',
+      description: '修改用户 Todolist 中某项已有任务的标题、分类、开始时间、截止时间、优先级、提醒或重复规则。',
       parameters: {
         type: 'object',
         properties: {
           taskTitleOrId: {
             type: 'string',
-            description: '要修改的目标任务的原标题或关键词',
+            description: '要修改的目标任务的原标题、关键词或任务 ID',
           },
           newTitle: {
             type: 'string',
@@ -94,9 +148,25 @@ const LOCAL_TOOLS: ToolDefinition[] = [
             type: 'string',
             description: '修改后的新分类（选填）',
           },
+          newStartTime: {
+            type: 'string',
+            description: '修改后的开始时间 YYYY-MM-DDTHH:mm（选填）',
+          },
           newDueDate: {
             type: 'string',
-            description: '修改后的截止时间，格式为 YYYY-MM-DDTHH:mm（选填）',
+            description: '修改后的截止时间 YYYY-MM-DDTHH:mm（选填）',
+          },
+          newPriority: {
+            type: 'number',
+            description: '修改后的优先级 1:低 / 2:中 / 3:高（选填）',
+          },
+          newReminderOption: {
+            type: 'string',
+            description: '修改后的提醒选项（选填）',
+          },
+          newRepeatOption: {
+            type: 'string',
+            description: '修改后的重复规则（选填）',
           },
         },
         required: ['taskTitleOrId'],
@@ -107,13 +177,30 @@ const LOCAL_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'complete_task',
-      description: '将用户 Todolist 中的某项待办任务标记为已完成。当用户说“我做完了xx”、“把xx标记为完成”时调用。',
+      description: '将用户 Todolist 中的某项待办任务标记为已完成。',
       parameters: {
         type: 'object',
         properties: {
           taskTitleOrId: {
             type: 'string',
-            description: '要标记完成的任务标题或任务关键词',
+            description: '要标记完成的任务标题、关键词或任务 ID',
+          },
+        },
+        required: ['taskTitleOrId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'reopen_task',
+      description: '重新打开/激活某项已完成的任务，将其状态恢复为未完成待办。当用户说“重新做xx”、“把xx重新标记为未完成”时调用。',
+      parameters: {
+        type: 'object',
+        properties: {
+          taskTitleOrId: {
+            type: 'string',
+            description: '要重新激活的任务标题、关键词或任务 ID',
           },
         },
         required: ['taskTitleOrId'],
@@ -124,13 +211,13 @@ const LOCAL_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'delete_task',
-      description: '从用户的 Todolist 中删除某项待办任务。当用户要求“删除xx任务”、“把xx删掉”时调用此工具。',
+      description: '从用户的 Todolist 中删除某项待办任务。',
       parameters: {
         type: 'object',
         properties: {
           taskTitleOrId: {
             type: 'string',
-            description: '要删除的任务标题或关键词',
+            description: '要删除的任务标题、关键词或任务 ID',
           },
         },
         required: ['taskTitleOrId'],
@@ -140,8 +227,66 @@ const LOCAL_TOOLS: ToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'clear_completed_tasks',
+      description: '清空/删除用户的全部已完成历史任务。当用户要求“清空已完成”、“删除所有做完的任务”时调用。',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'restore_last_deleted',
+      description: '撤销最近一次的删除操作，恢复刚被删除的任务。当用户说“撤销刚才的删除”、“恢复刚才删掉的任务”、“撤回”时调用。',
+      parameters: {
+        type: 'object',
+        properties: {},
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'query_tasks',
+      description: '灵活查询与检索用户的任务列表。支持按时间范围（today/tomorrow/this_week/all/具体日期）、状态（pending/completed/all）、分类、关键词或优先级综合筛选。',
+      parameters: {
+        type: 'object',
+        properties: {
+          dateRange: {
+            type: 'string',
+            description: '日期范围：today(今天) / tomorrow(明天) / this_week(本周) / all(全部) / YYYY-MM-DD(指定日期)，选填',
+          },
+          status: {
+            type: 'string',
+            description: '任务状态：pending(待办未完成) / completed(已完成) / all(全部)，选填，默认 all',
+          },
+          category: {
+            type: 'string',
+            description: '分类过滤（如 工作 / 生活 / 学习 等），选填',
+          },
+          keyword: {
+            type: 'string',
+            description: '任务标题搜索关键词，选填',
+          },
+          priority: {
+            type: 'number',
+            description: '优先级筛选 1/2/3，选填',
+          },
+          limit: {
+            type: 'number',
+            description: '最多返回的任务数量（默认 30，最大 50），防止结果过多超出上下文',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_today_tasks',
-      description: '查询用户在当前 Todolist 中的今日任务列表、各分类进度与完成统计。',
+      description: '快速查询用户在当前 Todolist 中的今日任务列表详情与完成率。',
       parameters: {
         type: 'object',
         properties: {},
@@ -224,29 +369,128 @@ function normalizeTaskName(s: string): string {
     .toLowerCase();
 }
 
-function findTaskInList(tasks: Todo[], query: string): Todo | undefined {
-  if (!query) return undefined;
+function matchesDateRange(t: Todo, dateRange?: string, now: Date = new Date()): boolean {
+  if (!dateRange || dateRange === 'all') return true;
+
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+
+  const tomorrowDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const tomY = tomorrowDate.getFullYear();
+  const tomM = String(tomorrowDate.getMonth() + 1).padStart(2, '0');
+  const tomD = String(tomorrowDate.getDate()).padStart(2, '0');
+  const tomorrowStr = `${tomY}-${tomM}-${tomD}`;
+
+  let rangeStart = '';
+  let rangeEnd = '';
+
+  if (dateRange === 'today') {
+    rangeStart = todayStr;
+    rangeEnd = todayStr;
+  } else if (dateRange === 'tomorrow') {
+    rangeStart = tomorrowStr;
+    rangeEnd = tomorrowStr;
+  } else if (dateRange === 'this_week') {
+    const dayOfWeek = now.getDay() || 7; // 1 (Mon) to 7 (Sun)
+    const mon = new Date(now.getTime() - (dayOfWeek - 1) * 24 * 60 * 60 * 1000);
+    const sun = new Date(now.getTime() + (7 - dayOfWeek) * 24 * 60 * 60 * 1000);
+    rangeStart = `${mon.getFullYear()}-${String(mon.getMonth() + 1).padStart(2, '0')}-${String(mon.getDate()).padStart(2, '0')}`;
+    rangeEnd = `${sun.getFullYear()}-${String(sun.getMonth() + 1).padStart(2, '0')}-${String(sun.getDate()).padStart(2, '0')}`;
+  } else if (dateRange === 'this_month') {
+    const firstDay = `${yyyy}-${mm}-01`;
+    const lastDate = new Date(yyyy, Number(mm), 0).getDate();
+    rangeStart = firstDay;
+    rangeEnd = `${yyyy}-${mm}-${String(lastDate).padStart(2, '0')}`;
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateRange)) {
+    rangeStart = dateRange;
+    rangeEnd = dateRange;
+  } else {
+    return true;
+  }
+
+  const getDayStr = (iso?: string) => (iso ? iso.slice(0, 10) : '');
+  const taskStart = getDayStr(t.startTime);
+  const taskDue = getDayStr(t.dueDate);
+  const taskCompleted = getDayStr(t.completedAt);
+
+  // If task is completed and has completedAt date
+  if (t.completed && taskCompleted) {
+    if (taskCompleted >= rangeStart && taskCompleted <= rangeEnd) return true;
+  }
+
+  // Interval overlap: [taskStart, taskDue] overlaps [rangeStart, rangeEnd]
+  if (taskStart && taskDue) {
+    return taskStart <= rangeEnd && taskDue >= rangeStart;
+  }
+  if (taskStart && !taskDue) {
+    return taskStart <= rangeEnd;
+  }
+  if (!taskStart && taskDue) {
+    return taskDue >= rangeStart;
+  }
+  return true;
+}
+
+function formatTodoDetail(t: Todo) {
+  return {
+    id: t.id,
+    title: t.title,
+    category: t.category || '默认',
+    completed: t.completed,
+    status: t.completed ? '已完成' : '待办进行中',
+    startTime: t.startTime || undefined,
+    dueDate: t.dueDate || undefined,
+    timeText: t.timeText || undefined,
+    priority: t.priority === 3 ? '高' : t.priority === 2 ? '中' : t.priority === 1 ? '低' : '无',
+    reminderOption: t.reminderOption || undefined,
+    repeatOption: t.repeatOption || undefined,
+    completedAt: t.completedAt || undefined,
+    gitUrl: t.gitUrl || undefined,
+  };
+}
+
+interface MatchResult {
+  match?: Todo;
+  ambiguous?: boolean;
+  candidates?: Todo[];
+}
+
+function findMatchingTasks(tasks: Todo[], query: string): MatchResult {
+  if (!query) return {};
   const raw = query.trim();
   // 1. Direct ID match
-  let t = tasks.find((x) => x.id === raw);
-  if (t) return t;
+  const byId = tasks.find((x) => x.id === raw);
+  if (byId) return { match: byId };
 
   const cleanQ = normalizeTaskName(raw);
-  if (!cleanQ) return undefined;
+  if (!cleanQ) return {};
 
   // 2. Exact clean title match
-  t = tasks.find((x) => normalizeTaskName(x.title) === cleanQ);
-  if (t) return t;
+  const exactMatches = tasks.filter((x) => normalizeTaskName(x.title) === cleanQ);
+  if (exactMatches.length === 1) {
+    return { match: exactMatches[0] };
+  }
+  if (exactMatches.length > 1) {
+    return { ambiguous: true, candidates: exactMatches };
+  }
 
   // 3. Bidirectional inclusion match
-  t = tasks.find((x) => {
+  const partialMatches = tasks.filter((x) => {
     const cleanT = normalizeTaskName(x.title);
     if (!cleanT) return false;
     return cleanT.includes(cleanQ) || cleanQ.includes(cleanT);
   });
-  return t;
-}
+  if (partialMatches.length === 1) {
+    return { match: partialMatches[0] };
+  }
+  if (partialMatches.length > 1) {
+    return { ambiguous: true, candidates: partialMatches };
+  }
 
+  return {};
+}
 
 // Whether the in-place model dropdown in the chat footer is open.
 const modelPickerOpen = ref(false);
@@ -340,7 +584,7 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
   const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 星期${['日', '一', '二', '三', '四', '五', '六'][now.getDay()]}`;
 
   const system = apiKey.value.trim()
-    ? `你是 Todolist 中的待办助手，由用户配置的大模型服务驱动。当前接入地址：${cfg.endpoint}；当前使用模型：${cfg.model}。当前时间：${dateStr}。\n【身份如实准则】：当被问到你是什么模型、由谁驱动、基于什么架构或框架时，请如实说明你是由用户配置的大模型服务（接入地址 ${cfg.endpoint}、模型 ${cfg.model}）驱动的待办助手，不要自称使用任何未用户配置或虚构的框架、架构或底层模型。\n【工具能力】：你可为用户调用待办管理与网络工具：\n- create_task: 新建待办；\n- update_task: 修改已有待办的标题、分类、截止时间；\n- delete_task: 删除某项待办；\n- complete_task: 标记待办完成；\n- get_today_tasks: 查询今日任务进度；\n- web_search / fetch_webpage: 网络检索与网页精读。\n【操作准则】：当用户提出新建、修改、删除或完成待办的诉求时，请直接调用对应工具执行。用户未配置网络检索时请不要编造网络检索结果。回答请准确、专业、友好并使用中文。\n【排版要求（务必遵守）】：回答务必注重条理与可读性。\n1) 如果内容包含多个方面或步骤，先用 **加粗小节标题**（如 **一、要点分析**、**二、建议**）分节；\n2) 并列要点一律用行首符号 - 或有序 1. 2. 列表逐条列出，不要把它们吞进同一句话里；\n3) 段落与条目之间用空行分隔，不要输出连续一整段拥挤的文字墙；\n4) 不确定或有取舍时给出简短小结；内容简短时 1-3 条即可，不必强行堆砌。`
+    ? `你是 Todolist 中的待办助手，由用户配置的大模型服务驱动。当前接入地址：${cfg.endpoint}；当前使用模型：${cfg.model}。当前时间：${dateStr}。\n【身份如实准则】：当被问到你是什么模型、由谁驱动、基于什么架构或框架时，请如实说明你是由用户配置的大模型服务（接入地址 ${cfg.endpoint}、模型 ${cfg.model}）驱动的待办助手，不要自称使用任何未用户配置或虚构的框架、架构或底层模型。\n【工具能力】：你可为用户调用丰富的待办管理与网络工具：\n- create_task: 新建单条待办任务（支持标题、分类、开始时间、截止时间、优先级1-3、提醒与重复）；\n- batch_create_tasks: 批量新建多条待办任务（适合用户提出多项规划或任务列表时一次性创建）；\n- update_task: 修改已有待办的标题、分类、起止时间、截止时间、优先级、提醒或重复；\n- complete_task: 标记待办任务为已完成；\n- reopen_task: 重新打开/激活已完成的待办任务，将其恢复为未完成状态；\n- delete_task: 从列表中删除指定待办；\n- clear_completed_tasks: 一键清空所有已完成的历史任务；\n- restore_last_deleted: 撤销最近一次删除操作，恢复刚被删除的任务；\n- query_tasks: 灵活查询/筛选任务（支持按日期范围 today/tomorrow/this_week/all/具体日期、按状态 pending/completed/all、按分类、按关键词、优先级和数量限制检索）；\n- get_today_tasks: 快速查询今日任务详情与完成率；\n- web_search / fetch_webpage: 联网检索与网页深度阅读。\n【新建任务时间确认准则（核心规则，务必严格遵守）】：\n- 当用户要求创建/新建待办任务（例如“帮我建一个任务：写周报”、“添加待办买菜”）时：\n  1) 检查用户输入中是否包含了明确的【开始时间】或【结束/截止时间】（包括“明天上午10点到12点”、“今天下午3点前完成”、“从9月5日到9月8日”等具体或相对时间）；\n  2) 如果用户【未提供开始时间与结束时间】且未说明“不设时间”：\n     - 严禁擅自直接调用 create_task 或 batch_create_tasks；\n     - 必须先在回复中礼貌询问用户，例如：“好的，请问「[任务名称]」的**开始时间**和**截止/结束时间**分别安排在什么时候呢？（例如：今天下午 14:00 至 17:00，或明天截止；如果不需要设置时间也可直接告诉我）”；\n  3) 只有当用户在初次请求中已包含时间、在后续回复中补充了时间，或者用户明确表示“不需要时间/不用设时间”时，才调用 create_task / batch_create_tasks 完成创建。\n【操作准则与安全性】：\n1) 当用户提出增、删、改、查、重新激活、批量添加、撤销恢复或清空已完成的诉求时，请在满足前置条件后直接调用对应工具执行；\n2) 消歧确认：若工具返回 ambiguous（匹配到多条候选任务），请向用户友好列出候选任务并请求用户指明具体要操作哪一项，切勿擅自修改或删除；\n3) 回答请准确、专业、友好并使用中文。\n【排版要求（务必遵守）】：回答务必注重条理与可读性。\n1) 如果内容包含多个方面或步骤，先用 **加粗小节标题**（如 **一、要点分析**、**二、建议**）分节；\n2) 并列要点一律用行首符号 - 或有序 1. 2. 列表逐条列出，不要把它们吞进同一句话里；\n3) 段落与条目之间用空行分隔，不要输出连续一整段拥挤的文字墙；\n4) 不确定或有取舍时给出简短小结；内容简短时 1-3 条即可，不必强行堆砌。`
     : '你是 Todolist 的待办助手。当前未配置大模型 API，无法进行通用问答与在线推理；当被问到你是什么模型或由什么驱动时，请如实说明当前由软件内置规则驱动，并友好提醒用户先点击左下角 ⚙️「设置」完成模型配置，即可获得模型驱动的完整问答。如果你在生成日报，请按有结构、分段、分点的条理输出。';
 
   // Only feed the most recent turns to the model, so very long chats don't
@@ -437,8 +681,13 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
         if (toolName === 'create_task') {
           const title = (args.title || '').trim();
           const category = (args.category || '工作').trim();
-          const dueDate = (args.dueDate || '').trim();
-          const startTime = (args.startTime || '').trim() || getCurrentNowISO();
+          const rawStartTime = (args.startTime || '').trim();
+          const rawDueDate = (args.dueDate || '').trim();
+          const noTimeConfirmed = Boolean(args.noTimeConfirmed);
+          const priority = args.priority !== undefined ? Number(args.priority) : undefined;
+          const reminderOption = (args.reminderOption || '').trim() || undefined;
+          const repeatOption = (args.repeatOption || '').trim() || undefined;
+
           const step: AgentStep = {
             name: 'create_task',
             title: `创建待办任务：「${title || '新任务'}」`,
@@ -447,27 +696,7 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
           tail.steps.push(step);
           await scrollToBottom();
 
-          if (title) {
-            emit('create-task', {
-              title,
-              category,
-              startTime,
-              dueDate: dueDate || undefined,
-            });
-            step.status = 'done';
-            step.title = `已创建待办任务：「${title}」${category ? ` · ${category}` : ''}`;
-            await scrollToBottom();
-
-            conversation.push({
-              role: 'tool',
-              tool_call_id: call.id,
-              name: toolName,
-              content: JSON.stringify({
-                success: true,
-                message: `待办任务「${title}」已成功创建并保存到 Todolist 中！分类：${category}，开始时间：${startTime}。`,
-              }),
-            });
-          } else {
+          if (!title) {
             step.status = 'error';
             step.title = '创建任务失败：缺少标题';
             await scrollToBottom();
@@ -477,12 +706,132 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
               name: toolName,
               content: JSON.stringify({ success: false, error: '缺少任务标题' }),
             });
+          } else if (!rawStartTime && !rawDueDate && !noTimeConfirmed) {
+            step.status = 'error';
+            step.title = `创建未执行：需要向用户确认起止时间`;
+            await scrollToBottom();
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: false,
+                needTimeConfirmation: true,
+                message: `创建未执行：用户尚未提供任务「${title}」的开始时间或截止时间。请在最终回答中主动询问用户：“请问「${title}」的开始时间和截止时间分别安排在什么时候呢？（例如：今天下午 14:00 至 17:00，或明天截止；如果不需要设置时间也可以直接告诉我）”。`,
+              }),
+            });
+          } else {
+            const startTime = rawStartTime || (rawDueDate ? getCurrentNowISO() : undefined);
+            const dueDate = rawDueDate || undefined;
+            const hasDup = props.todos.some(
+              (t) => !t.completed && normalizeTaskName(t.title) === normalizeTaskName(title),
+            );
+            const dupWarning = hasDup ? `（提示：列表中已有同名未完成任务「${title}」）` : '';
+
+            emit('create-task', {
+              title,
+              category,
+              startTime,
+              dueDate,
+              priority,
+              reminderOption,
+              repeatOption,
+            });
+            step.status = 'done';
+            step.title = `已创建待办任务：「${title}」${category ? ` · ${category}` : ''}${hasDup ? ' (已有同名)' : ''}`;
+            await scrollToBottom();
+
+            const timeDesc = startTime && dueDate ? `${startTime} ~ ${dueDate}` : startTime ? `开始于 ${startTime}` : dueDate ? `截止于 ${dueDate}` : '未指定具体起止时间';
+
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: true,
+                hasDuplicate: hasDup,
+                message: `待办任务「${title}」已成功创建并保存！分类：${category}，时间：${timeDesc}${priority ? `，优先级：${priority === 3 ? '高' : priority === 2 ? '中' : '低'}` : ''}。${dupWarning}`,
+              }),
+            });
+          }
+        } else if (toolName === 'batch_create_tasks') {
+          const rawTasks = Array.isArray(args.tasks) ? args.tasks : [];
+          const noTimeConfirmed = Boolean(args.noTimeConfirmed);
+          const validTasks = rawTasks
+            .filter((x: any) => x && typeof x.title === 'string' && x.title.trim())
+            .map((x: any) => {
+              const sTime = (x.startTime || '').trim();
+              const dDate = (x.dueDate || '').trim();
+              return {
+                title: x.title.trim(),
+                category: (x.category || '工作').trim(),
+                startTime: sTime || (dDate ? getCurrentNowISO() : undefined),
+                dueDate: dDate || undefined,
+                priority: x.priority !== undefined ? Number(x.priority) : undefined,
+                reminderOption: (x.reminderOption || '').trim() || undefined,
+                repeatOption: (x.repeatOption || '').trim() || undefined,
+                hasExplicitTime: Boolean(sTime || dDate),
+              };
+            });
+
+          const step: AgentStep = {
+            name: 'batch_create_tasks',
+            title: `批量创建 ${validTasks.length} 项待办任务`,
+            status: 'running',
+          };
+          tail.steps.push(step);
+          await scrollToBottom();
+
+          if (validTasks.length === 0) {
+            step.status = 'error';
+            step.title = '批量创建失败：未提供有效任务列表';
+            await scrollToBottom();
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({ success: false, error: '未提供有效任务列表' }),
+            });
+          } else if (validTasks.every((t: any) => !t.hasExplicitTime) && !noTimeConfirmed) {
+            step.status = 'error';
+            step.title = `批量创建未执行：需要向用户确认起止时间`;
+            await scrollToBottom();
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: false,
+                needTimeConfirmation: true,
+                message: `批量创建未执行：用户尚未提供这些任务的具体起止时间安排。请在最终回答中向用户询问这些任务的时间规划（或提示若无需设置时间可直接确认）。`,
+              }),
+            });
+          } else {
+            emit('batch-create-tasks', validTasks);
+            step.status = 'done';
+            step.title = `已批量创建 ${validTasks.length} 项待办任务：${validTasks.map((t: { title: string }) => t.title).join('、')}`;
+            await scrollToBottom();
+
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: true,
+                count: validTasks.length,
+                message: `成功批量创建 ${validTasks.length} 条待办任务：${validTasks.map((t: { title: string }) => `「${t.title}」`).join('、')}！`,
+              }),
+            });
           }
         } else if (toolName === 'update_task') {
           const taskTitleOrId = (args.taskTitleOrId || '').trim();
           const newTitle = (args.newTitle || '').trim();
           const newCategory = (args.newCategory || '').trim();
+          const newStartTime = (args.newStartTime || '').trim();
           const newDueDate = (args.newDueDate || '').trim();
+          const newPriority = args.newPriority !== undefined ? Number(args.newPriority) : undefined;
+          const newReminderOption = (args.newReminderOption || '').trim();
+          const newRepeatOption = (args.newRepeatOption || '').trim();
 
           const step: AgentStep = {
             name: 'update_task',
@@ -492,13 +841,37 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
           tail.steps.push(step);
           await scrollToBottom();
 
-          const target = findTaskInList(props.todos, taskTitleOrId);
-          if (target) {
+          const matchRes = findMatchingTasks(props.todos, taskTitleOrId);
+          if (matchRes.ambiguous && matchRes.candidates) {
+            const listDesc = matchRes.candidates
+              .map((t) => `「${t.title}」(分类: ${t.category || '默认'}, ${t.completed ? '已完成' : '待办'})`)
+              .join('、');
+            step.status = 'error';
+            step.title = `修改未执行：匹配到 ${matchRes.candidates.length} 个相似任务需确认`;
+            await scrollToBottom();
+
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: false,
+                ambiguous: true,
+                candidates: matchRes.candidates.map(formatTodoDetail),
+                message: `未执行修改：检索到多条相似任务（${listDesc}）。请向用户列出这些选项并询问用户具体要修改哪一项。`,
+              }),
+            });
+          } else if (matchRes.match) {
+            const target = matchRes.match;
             emit('update-task', {
               taskTitleOrId: target.id,
               newTitle: newTitle || undefined,
               newCategory: newCategory || undefined,
+              newStartTime: newStartTime || undefined,
               newDueDate: newDueDate || undefined,
+              newPriority: newPriority !== undefined ? newPriority : undefined,
+              newReminderOption: newReminderOption || undefined,
+              newRepeatOption: newRepeatOption || undefined,
             });
             step.status = 'done';
             step.title = `已修改待办任务：「${newTitle || target.title}」`;
@@ -510,7 +883,7 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
               name: toolName,
               content: JSON.stringify({
                 success: true,
-                message: `待办任务「${target.title}」已成功修改更新！${newTitle ? `新标题：${newTitle}` : ''}`,
+                message: `待办任务「${target.title}」已成功更新！${newTitle ? `新标题：${newTitle}；` : ''}${newCategory ? `新分类：${newCategory}；` : ''}${newDueDate ? `新截止时间：${newDueDate}；` : ''}${newPriority ? `新优先级：${newPriority === 3 ? '高' : newPriority === 2 ? '中' : '低'}；` : ''}`,
               }),
             });
           } else {
@@ -537,8 +910,28 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
           tail.steps.push(step);
           await scrollToBottom();
 
-          const target = findTaskInList(props.todos, taskTitleOrId);
-          if (target) {
+          const matchRes = findMatchingTasks(props.todos, taskTitleOrId);
+          if (matchRes.ambiguous && matchRes.candidates) {
+            const listDesc = matchRes.candidates
+              .map((t) => `「${t.title}」(分类: ${t.category || '默认'}, ${t.completed ? '已完成' : '待办'})`)
+              .join('、');
+            step.status = 'error';
+            step.title = `标记完成未执行：匹配到 ${matchRes.candidates.length} 个相似任务需确认`;
+            await scrollToBottom();
+
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: false,
+                ambiguous: true,
+                candidates: matchRes.candidates.map(formatTodoDetail),
+                message: `未执行操作：检索到多条相似任务（${listDesc}）。请向用户列出这些选项并询问用户具体要完成哪一项。`,
+              }),
+            });
+          } else if (matchRes.match) {
+            const target = matchRes.match;
             emit('complete-task', target.id);
             step.status = 'done';
             step.title = `已将任务标记为完成：「${target.title}」`;
@@ -567,6 +960,66 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
               }),
             });
           }
+        } else if (toolName === 'reopen_task') {
+          const taskTitleOrId = (args.taskTitleOrId || '').trim();
+          const step: AgentStep = {
+            name: 'reopen_task',
+            title: `重新激活待办任务：「${taskTitleOrId}」`,
+            status: 'running',
+          };
+          tail.steps.push(step);
+          await scrollToBottom();
+
+          const matchRes = findMatchingTasks(props.todos, taskTitleOrId);
+          if (matchRes.ambiguous && matchRes.candidates) {
+            const listDesc = matchRes.candidates
+              .map((t) => `「${t.title}」(分类: ${t.category || '默认'}, ${t.completed ? '已完成' : '待办'})`)
+              .join('、');
+            step.status = 'error';
+            step.title = `恢复待办未执行：匹配到 ${matchRes.candidates.length} 个相似任务需确认`;
+            await scrollToBottom();
+
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: false,
+                ambiguous: true,
+                candidates: matchRes.candidates.map(formatTodoDetail),
+                message: `未执行操作：检索到多条相似任务（${listDesc}）。请向用户列出这些选项并询问用户具体要恢复哪一项。`,
+              }),
+            });
+          } else if (matchRes.match) {
+            const target = matchRes.match;
+            emit('reopen-task', target.id);
+            step.status = 'done';
+            step.title = `已恢复待办任务：「${target.title}」`;
+            await scrollToBottom();
+
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: true,
+                message: `已将任务「${target.title}」重新标记为未完成待办！`,
+              }),
+            });
+          } else {
+            step.status = 'error';
+            step.title = `未找到待激活任务：「${taskTitleOrId}」`;
+            await scrollToBottom();
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: false,
+                error: `未在列表中找到任务「${taskTitleOrId}」`,
+              }),
+            });
+          }
         } else if (toolName === 'delete_task') {
           const taskTitleOrId = (args.taskTitleOrId || '').trim();
           const step: AgentStep = {
@@ -577,8 +1030,28 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
           tail.steps.push(step);
           await scrollToBottom();
 
-          const target = findTaskInList(props.todos, taskTitleOrId);
-          if (target) {
+          const matchRes = findMatchingTasks(props.todos, taskTitleOrId);
+          if (matchRes.ambiguous && matchRes.candidates) {
+            const listDesc = matchRes.candidates
+              .map((t) => `「${t.title}」(分类: ${t.category || '默认'}, ${t.completed ? '已完成' : '待办'})`)
+              .join('、');
+            step.status = 'error';
+            step.title = `删除未执行：匹配到 ${matchRes.candidates.length} 个相似任务需确认`;
+            await scrollToBottom();
+
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: false,
+                ambiguous: true,
+                candidates: matchRes.candidates.map(formatTodoDetail),
+                message: `未执行删除：检索到多条相似任务（${listDesc}）。为防止误删，请向用户列出这些选项并询问用户具体要删除哪一项。`,
+              }),
+            });
+          } else if (matchRes.match) {
+            const target = matchRes.match;
             emit('delete-task', target.id);
             step.status = 'done';
             step.title = `已删除待办任务：「${target.title}」`;
@@ -590,7 +1063,7 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
               name: toolName,
               content: JSON.stringify({
                 success: true,
-                message: `待办任务「${target.title}」已成功从 Todolist 中删除！`,
+                message: `待办任务「${target.title}」已从 Todolist 中删除！（支持撤销恢复）`,
               }),
             });
           } else {
@@ -607,6 +1080,120 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
               }),
             });
           }
+        } else if (toolName === 'clear_completed_tasks') {
+          const step: AgentStep = {
+            name: 'clear_completed_tasks',
+            title: `清空所有已完成任务`,
+            status: 'running',
+          };
+          tail.steps.push(step);
+          await scrollToBottom();
+
+          const completedCount = props.todos.filter((t) => t.completed).length;
+          emit('clear-completed-tasks');
+          step.status = 'done';
+          step.title = `已清空 ${completedCount} 项已完成任务`;
+          await scrollToBottom();
+
+          conversation.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            name: toolName,
+            content: JSON.stringify({
+              success: true,
+              clearedCount: completedCount,
+              message: `已成功清空所有已完成任务（共 ${completedCount} 项，支持撤销恢复）！`,
+            }),
+          });
+        } else if (toolName === 'restore_last_deleted') {
+          const step: AgentStep = {
+            name: 'restore_last_deleted',
+            title: '撤销上一次删除操作',
+            status: 'running',
+          };
+          tail.steps.push(step);
+          await scrollToBottom();
+
+          let restoreRes: { count: number; titles: string[] } = { count: 0, titles: [] };
+          emit('restore-last-deleted', (res) => {
+            if (res) restoreRes = res;
+          });
+
+          if (restoreRes.count > 0) {
+            step.status = 'done';
+            step.title = `已恢复 ${restoreRes.count} 项误删任务：${restoreRes.titles.join('、')}`;
+            await scrollToBottom();
+
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: true,
+                restoredCount: restoreRes.count,
+                restoredTitles: restoreRes.titles,
+                message: `已成功撤销删除，恢复了 ${restoreRes.count} 条任务：${restoreRes.titles.map((x) => `「${x}」`).join('、')}！`,
+              }),
+            });
+          } else {
+            step.status = 'error';
+            step.title = '最近删除记录为空，未恢复任何任务';
+            await scrollToBottom();
+
+            conversation.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name: toolName,
+              content: JSON.stringify({
+                success: false,
+                error: '最近删除记录为空，没有找到可撤销或恢复的任务。',
+              }),
+            });
+          }
+        } else if (toolName === 'query_tasks') {
+          const dateRange = args.dateRange || 'all';
+          const status = (args.status || 'all').toLowerCase();
+          const category = (args.category || '').trim();
+          const keyword = (args.keyword || '').trim().toLowerCase();
+          const priority = args.priority !== undefined ? Number(args.priority) : undefined;
+          const limit = typeof args.limit === 'number' && args.limit > 0 ? Math.min(Math.floor(args.limit), 50) : 30;
+
+          const step: AgentStep = {
+            name: 'query_tasks',
+            title: `查询任务列表（${dateRange !== 'all' ? dateRange : ''} ${status !== 'all' ? status : ''} ${category ? category : ''}）`.trim(),
+            status: 'running',
+          };
+          tail.steps.push(step);
+          await scrollToBottom();
+
+          const filtered = props.todos.filter((t) => {
+            if (status === 'pending' && t.completed) return false;
+            if (status === 'completed' && !t.completed) return false;
+            if (category && (t.category || '').toLowerCase() !== category.toLowerCase()) return false;
+            if (priority !== undefined && t.priority !== priority) return false;
+            if (keyword && !t.title.toLowerCase().includes(keyword)) return false;
+            if (!matchesDateRange(t, dateRange)) return false;
+            return true;
+          });
+
+          const totalMatched = filtered.length;
+          const paged = filtered.slice(0, limit);
+
+          step.status = 'done';
+          step.title = `已检索到 ${totalMatched} 项符合条件的任务${totalMatched > limit ? `（展示前 ${limit} 项）` : ''}`;
+          await scrollToBottom();
+
+          conversation.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            name: toolName,
+            content: JSON.stringify({
+              totalMatched,
+              returnedCount: paged.length,
+              hasMore: totalMatched > limit,
+              tasks: paged.map(formatTodoDetail),
+            }),
+          });
         } else if (toolName === 'web_search') {
           const query = (args.query || '').trim();
           const step: AgentStep = {
@@ -676,7 +1263,7 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
         } else if (toolName === 'get_today_tasks') {
           const step: AgentStep = {
             name: 'get_today_tasks',
-            title: `查询 Todolist 今日任务进度`,
+            title: `查询 Todolist 今日任务详情与进度`,
             status: 'running',
           };
           tail.steps.push(step);
@@ -685,12 +1272,14 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
           const st = assistant.stats.value;
           const tasksInfo = {
             total: st.todayTasks.length,
-            completed: st.completedToday.map((t) => t.title),
-            pending: st.pendingToday.map((t) => t.title),
+            completedCount: st.completedToday.length,
+            pendingCount: st.pendingToday.length,
             completionRate: `${st.completionRate}%`,
+            pendingTasks: st.pendingToday.map(formatTodoDetail),
+            completedTasks: st.completedToday.map(formatTodoDetail),
           };
           step.status = 'done';
-          step.title = `已获取今日待办：共 ${st.todayTasks.length} 项（完成率 ${st.completionRate}%）`;
+          step.title = `已获取今日待办：共 ${st.todayTasks.length} 项（未完成 ${st.pendingToday.length} 项，完成率 ${st.completionRate}%）`;
           await scrollToBottom();
 
           conversation.push({

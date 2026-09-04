@@ -481,21 +481,100 @@ const getCurrentNowISO = () => {
   return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
 };
 
-const handleCreateTaskFromAI = (data: { title: string; category?: string; dueDate?: string; startTime?: string; priority?: number }) => {
+const normalizeReminderOption = (opt?: string): string | undefined => {
+  if (!opt) return undefined;
+  const s = opt.toLowerCase().trim();
+  if (['none', '无', '不提醒', '0'].includes(s)) return 'none';
+  if (['5min', '5分钟', '5m', '提前5分钟'].includes(s)) return '5min';
+  if (['15min', '15分钟', '15m', '提前15分钟'].includes(s)) return '15min';
+  if (['30min', '30分钟', '30m', '提前30分钟', '半小时'].includes(s)) return '30min';
+  if (['1hour', '1小时', '1h', '60min', '提前1小时'].includes(s)) return '1hour';
+  if (['1day', '1天', '1d', '24hours', '提前1天'].includes(s)) return '1day';
+  return opt;
+};
+
+const normalizeRepeatOption = (opt?: string): string | undefined => {
+  if (!opt) return undefined;
+  const s = opt.toLowerCase().trim();
+  if (['none', '不重复', '无'].includes(s)) return 'none';
+  if (['daily', '每天', '每日', 'day'].includes(s)) return 'daily';
+  if (['workday', '工作日'].includes(s)) return 'workday';
+  if (['weekly', '每周', '每星期', 'week'].includes(s)) return 'weekly';
+  if (['monthly', '每月', 'month'].includes(s)) return 'monthly';
+  return opt;
+};
+
+const normalizePriority = (p?: any): number | undefined => {
+  if (p === undefined || p === null) return undefined;
+  if (typeof p === 'number') return Math.min(3, Math.max(1, p));
+  const s = String(p).trim();
+  if (['3', '高', '紧急', 'high', 'p1'].includes(s)) return 3;
+  if (['2', '中', '普通', 'medium', 'p2'].includes(s)) return 2;
+  if (['1', '低', '不急', 'low', 'p3'].includes(s)) return 1;
+  return undefined;
+};
+
+// 最近删除任务暂存区（用于安全撤销与恢复）
+const recentlyDeletedStack = ref<Array<{ tasks: Todo[]; timestamp: number; desc: string }>>([]);
+
+const handleCreateTaskFromAI = (data: {
+  title: string;
+  category?: string;
+  dueDate?: string;
+  startTime?: string;
+  priority?: any;
+  reminderOption?: string;
+  repeatOption?: string;
+}) => {
   const finalStartTime = (data.startTime || '').trim() || getCurrentNowISO();
   const newTask: Todo = {
-    id: Date.now().toString(),
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     title: data.title,
     category: data.category || '工作',
     completed: false,
     startTime: finalStartTime,
     dueDate: data.dueDate || undefined,
     timeText: formatTimeText(data.dueDate, finalStartTime),
-    priority: data.priority || undefined,
+    priority: normalizePriority(data.priority),
+    reminderOption: normalizeReminderOption(data.reminderOption),
+    repeatOption: normalizeRepeatOption(data.repeatOption),
   };
   todos.value.push(newTask);
   saveTodos();
   return newTask;
+};
+
+const handleBatchCreateTasksFromAI = (
+  tasks: Array<{
+    title: string;
+    category?: string;
+    dueDate?: string;
+    startTime?: string;
+    priority?: any;
+    reminderOption?: string;
+    repeatOption?: string;
+  }>
+) => {
+  const createdList: Todo[] = [];
+  tasks.forEach((data, index) => {
+    const finalStartTime = (data.startTime || '').trim() || getCurrentNowISO();
+    const newTask: Todo = {
+      id: `${Date.now()}_${index}_${Math.random().toString(36).slice(2, 6)}`,
+      title: data.title,
+      category: data.category || '工作',
+      completed: false,
+      startTime: finalStartTime,
+      dueDate: data.dueDate || undefined,
+      timeText: formatTimeText(data.dueDate, finalStartTime),
+      priority: normalizePriority(data.priority),
+      reminderOption: normalizeReminderOption(data.reminderOption),
+      repeatOption: normalizeRepeatOption(data.repeatOption),
+    };
+    todos.value.push(newTask);
+    createdList.push(newTask);
+  });
+  saveTodos();
+  return createdList;
 };
 
 const normalizeTaskName = (s: string) => {
@@ -540,14 +619,67 @@ const handleCompleteTaskFromAI = (titleOrId: string) => {
   return null;
 };
 
+const handleReopenTaskFromAI = (titleOrId: string) => {
+  const index = findTaskIndexByAI(titleOrId);
+  if (index !== -1) {
+    const t = todos.value[index];
+    t.completed = false;
+    t.completedAt = undefined;
+    saveTodos();
+    return t;
+  }
+  return null;
+};
+
 const handleDeleteTaskFromAI = (titleOrId: string): Todo | null => {
   const index = findTaskIndexByAI(titleOrId);
   if (index !== -1) {
     const deleted = todos.value.splice(index, 1)[0];
+    recentlyDeletedStack.value.push({
+      tasks: [deleted],
+      timestamp: Date.now(),
+      desc: `删除任务「${deleted.title}」`,
+    });
+    if (recentlyDeletedStack.value.length > 20) {
+      recentlyDeletedStack.value.shift();
+    }
     saveTodos();
     return deleted;
   }
   return null;
+};
+
+const handleClearCompletedTasksFromAI = () => {
+  const completedList = todos.value.filter((t) => t.completed);
+  if (completedList.length > 0) {
+    recentlyDeletedStack.value.push({
+      tasks: [...completedList],
+      timestamp: Date.now(),
+      desc: `清空 ${completedList.length} 项已完成任务`,
+    });
+    if (recentlyDeletedStack.value.length > 20) {
+      recentlyDeletedStack.value.shift();
+    }
+    todos.value = todos.value.filter((t) => !t.completed);
+    saveTodos();
+  }
+  return completedList.length;
+};
+
+const handleRestoreLastDeletedFromAI = (): { count: number; titles: string[] } => {
+  const last = recentlyDeletedStack.value.pop();
+  if (!last || last.tasks.length === 0) {
+    return { count: 0, titles: [] };
+  }
+  const restoredTitles: string[] = [];
+  last.tasks.forEach((t) => {
+    if (!todos.value.some((x) => x.id === t.id)) {
+      todos.value.push(t);
+      restoredTitles.push(t.title);
+    }
+  });
+  saveTodos();
+  return { count: restoredTitles.length, titles: restoredTitles };
 };
 
 const handleUpdateTaskFromAI = (data: {
@@ -555,15 +687,33 @@ const handleUpdateTaskFromAI = (data: {
   newTitle?: string;
   newCategory?: string;
   newDueDate?: string;
+  newStartTime?: string;
+  newPriority?: any;
+  newReminderOption?: string;
+  newRepeatOption?: string;
 }): Todo | null => {
   const index = findTaskIndexByAI(data.taskTitleOrId);
   if (index !== -1) {
     const task = todos.value[index];
     if (data.newTitle) task.title = data.newTitle;
     if (data.newCategory) task.category = data.newCategory;
-    if (data.newDueDate) {
-      task.dueDate = data.newDueDate;
+    if (data.newStartTime !== undefined) {
+      task.startTime = data.newStartTime || undefined;
+    }
+    if (data.newDueDate !== undefined) {
+      task.dueDate = data.newDueDate || undefined;
+    }
+    if (data.newStartTime !== undefined || data.newDueDate !== undefined) {
       task.timeText = formatTimeText(task.dueDate, task.startTime);
+    }
+    if (data.newPriority !== undefined) {
+      task.priority = normalizePriority(data.newPriority);
+    }
+    if (data.newReminderOption !== undefined) {
+      task.reminderOption = normalizeReminderOption(data.newReminderOption);
+    }
+    if (data.newRepeatOption !== undefined) {
+      task.repeatOption = normalizeRepeatOption(data.newRepeatOption);
     }
     saveTodos();
     return task;
@@ -628,9 +778,13 @@ const handleUpdateTaskFromAI = (data: {
       <AIChatView
         :todos="todos"
         @create-task="handleCreateTaskFromAI"
+        @batch-create-tasks="handleBatchCreateTasksFromAI"
         @complete-task="handleCompleteTaskFromAI"
+        @reopen-task="handleReopenTaskFromAI"
         @delete-task="handleDeleteTaskFromAI"
+        @clear-completed-tasks="handleClearCompletedTasksFromAI"
         @update-task="handleUpdateTaskFromAI"
+        @restore-last-deleted="(cb) => { const res = handleRestoreLastDeletedFromAI(); if (cb) cb(res); }"
         @open-settings="(tab) => handleOpenSettings(tab || 'ai')"
       />
     </div>
