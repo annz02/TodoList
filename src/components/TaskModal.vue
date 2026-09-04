@@ -3,11 +3,11 @@ import { ref, watch } from 'vue';
 
 const props = defineProps<{ 
   show: boolean;
-  initialTask?: { title: string; category?: string; dueDate?: string; notify?: boolean; priority?: number; reminderOption?: string; repeatOption?: string; lastNotifiedTime?: number | null; gitUrl?: string } | null;
+  initialTask?: { title: string; category?: string; dueDate?: string; priority?: number; gitUrl?: string } | null;
 }>();
 const emit = defineEmits<{ 
   (e: 'close'): void;
-  (e: 'save', taskData: { title: string; category?: string; dueDate: string; notify: boolean; reminderOption: string; repeatOption: string; lastNotifiedTime?: number | null; gitUrl?: string }): void;
+  (e: 'save', taskData: { title: string; category?: string; dueDate: string; gitUrl?: string }): void;
 }>();
 
 const title = ref('');
@@ -16,21 +16,6 @@ const gitUrl = ref('');
 const titleError = ref('');
 const dateTimeError = ref('');
 const dateTime = ref('');
-
-const reminder = ref('15 分钟前');
-const repeat = ref('不重复');
-
-const reminderOpen = ref(false);
-const repeatOpen = ref(false);
-const reminderOptions = ['15 分钟前', '30 分钟前', '1 小时前', '不提醒'];
-const repeatOptions = ['不重复', '每五分钟', '每十分钟'];
-
-watch(reminder, (newVal) => {
-  if (newVal === '不提醒') {
-    repeat.value = '不重复';
-    repeatOpen.value = false;
-  }
-});
 
 watch(() => props.show, (newVal) => {
   if (newVal) {
@@ -41,14 +26,11 @@ watch(() => props.show, (newVal) => {
       category.value = props.initialTask.category || '';
       gitUrl.value = props.initialTask.gitUrl || '';
       dateTime.value = props.initialTask.dueDate ? props.initialTask.dueDate.substring(0, 16) : '';
-      reminder.value = props.initialTask.reminderOption || (props.initialTask.notify ? '15 分钟前' : '不提醒');
-      repeat.value = props.initialTask.repeatOption || '不重复';
     } else {
       title.value = '';
       category.value = '';
       gitUrl.value = '';
       dateTime.value = '';
-      reminder.value = '15 分钟前';
     }
   }
 });
@@ -81,10 +63,6 @@ const handleSave = () => {
     category: category.value.trim() || undefined,
     gitUrl: gitUrl.value.trim() || undefined,
     dueDate: dateTime.value,
-    notify: reminder.value !== '不提醒',
-    reminderOption: reminder.value,
-    repeatOption: repeat.value,
-    lastNotifiedTime: props.initialTask?.lastNotifiedTime
   });
 };
 </script>
@@ -99,9 +77,9 @@ const handleSave = () => {
           <div class="header-icon-box">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
           </div>
-          <div class="header-titles">
-            <h2>{{ initialTask ? '修改任务' : '添加任务' }}</h2>
-            <p>创建一个新任务，规划你的待办事项</p>
+          <div class="header-texts">
+            <h2>{{ initialTask ? '编辑任务' : '新建任务' }}</h2>
+            <p>{{ initialTask ? '修改任务详情与截止时间' : '记录你的待办事项与截止时间' }}</p>
           </div>
         </div>
         <button class="close-btn" @click="emit('close')">
@@ -109,44 +87,40 @@ const handleSave = () => {
         </button>
       </div>
 
-      <div class="modal-body">
-        <!-- Title Card -->
+      <!-- Body Form -->
+      <div class="modal-body-form">
+        <!-- Title Input Card -->
         <div class="card title-card">
-          <div class="card-title">
-            <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-            <span>任务名称 <span class="required">*</span></span>
-          </div>
-          <div class="input-container" :class="{ 'has-error': titleError }">
-            <input type="text" v-model="title" maxlength="100" placeholder="请输入任务名称" autofocus @keyup.enter="handleSave" @input="titleError = ''" />
-            <span class="char-count">{{ title.length }}/100</span>
-          </div>
+          <input 
+            type="text" 
+            placeholder="准备做什么？" 
+            v-model="title" 
+            @input="titleError = ''"
+            :class="{ 'has-error': titleError }"
+          />
           <span v-if="titleError" class="error-msg">{{ titleError }}</span>
         </div>
 
-        <!-- Category Card -->
-        <div class="card category-card">
-          <div class="card-title">
-            <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
-            <span>任务分类</span>
+        <!-- Category & Project Folder Cards -->
+        <div class="form-row">
+          <!-- Category Card -->
+          <div class="card row-card">
+            <div class="card-title">
+              <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+              <span>分类</span>
+            </div>
+            <input type="text" placeholder="输入或选择分类" v-model="category" />
           </div>
-          <div class="input-container">
-            <input type="text" v-model="category" maxlength="50" placeholder="请输入任务分类（如：工作、学习、生活）" @keyup.enter="handleSave" />
-          </div>
-        </div>
 
-        <!-- Git Repository Card (Optional) -->
-        <div class="card git-card">
-          <div class="card-title">
-            <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="6" y1="3" x2="6" y2="15"></line>
-              <circle cx="18" cy="6" r="3"></circle>
-              <circle cx="6" cy="18" r="3"></circle>
-              <path d="M18 9a9 9 0 0 1-9 9"></path>
-            </svg>
-            <span>代码路径 <span class="optional-tag">（可选，用于 AI 日报提取 Commit）</span></span>
-          </div>
-          <div class="input-container">
-            <input type="text" v-model="gitUrl" placeholder="请输入本地代码目录路径（如 C:\Projects\...）" @keyup.enter="handleSave" />
+          <!-- Project Folder Card -->
+          <div class="card row-card">
+            <div class="card-title">
+              <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              <span>关联项目目录 (Git)</span>
+            </div>
+            <div class="input-with-action">
+              <input type="text" placeholder="本地代码库绝对路径" v-model="gitUrl" />
+            </div>
           </div>
         </div>
 
@@ -164,44 +138,6 @@ const handleSave = () => {
             <input type="datetime-local" ref="dateInputRef" v-model="dateTime" @input="dateTimeError = ''" class="overlay-input" style="pointer-events: none;" />
           </div>
           <span v-if="dateTimeError" class="error-msg">{{ dateTimeError }}</span>
-        </div>
-
-        <!-- Reminder Card -->
-        <div class="card row-card">
-          <div class="card-title">
-            <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-            <span>提醒</span>
-          </div>
-          <div class="custom-dropdown" tabindex="0" @blur="reminderOpen = false">
-            <div class="dropdown-selected" @click="reminderOpen = !reminderOpen">
-              <span>{{ reminder }}</span>
-              <svg class="select-arrow" :class="{ open: reminderOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </div>
-            <div class="dropdown-menu" v-show="reminderOpen">
-              <div class="dropdown-item" v-for="opt in reminderOptions" :key="opt" @click="reminder = opt; reminderOpen = false" :class="{ selected: reminder === opt }">
-                {{ opt }}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Repeat Card -->
-        <div class="card row-card" v-if="reminder !== '不提醒'">
-          <div class="card-title">
-            <svg class="green-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-            <span>重复</span>
-          </div>
-          <div class="custom-dropdown" tabindex="0" @blur="repeatOpen = false">
-            <div class="dropdown-selected" @click="repeatOpen = !repeatOpen">
-              <span>{{ repeat }}</span>
-              <svg class="select-arrow" :class="{ open: repeatOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </div>
-            <div class="dropdown-menu" v-show="repeatOpen">
-              <div class="dropdown-item" v-for="opt in repeatOptions" :key="opt" @click="repeat = opt; repeatOpen = false" :class="{ selected: repeat === opt }">
-                {{ opt }}
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 

@@ -11,13 +11,13 @@ import { renderMarkdown, cleanDSMLTags } from '../utils/markdown';
 
 const props = defineProps<{ todos: Todo[] }>();
 const emit = defineEmits<{
-  (e: 'create-task', task: { title: string; category?: string; dueDate?: string; startTime?: string; priority?: number; reminderOption?: string; repeatOption?: string }): void;
-  (e: 'batch-create-tasks', tasks: Array<{ title: string; category?: string; dueDate?: string; startTime?: string; priority?: number; reminderOption?: string; repeatOption?: string }>): void;
+  (e: 'create-task', task: { title: string; category?: string; dueDate?: string; startTime?: string; priority?: number }): void;
+  (e: 'batch-create-tasks', tasks: Array<{ title: string; category?: string; dueDate?: string; startTime?: string; priority?: number }>): void;
   (e: 'complete-task', taskTitleOrId: string): void;
   (e: 'reopen-task', taskTitleOrId: string): void;
   (e: 'delete-task', taskTitleOrId: string): void;
   (e: 'clear-completed-tasks'): void;
-  (e: 'update-task', data: { taskTitleOrId: string; newTitle?: string; newCategory?: string; newDueDate?: string; newStartTime?: string; newPriority?: number; newReminderOption?: string; newRepeatOption?: string }): void;
+  (e: 'update-task', data: { taskTitleOrId: string; newTitle?: string; newCategory?: string; newDueDate?: string; newStartTime?: string; newPriority?: number }): void;
   (e: 'restore-last-deleted', callback?: (res: { count: number; titles: string[] }) => void): void;
   (e: 'open-settings', tab?: 'general' | 'ai' | 'shortcuts'): void;
 }>();
@@ -77,14 +77,6 @@ const LOCAL_TOOLS: ToolDefinition[] = [
             type: 'number',
             description: '任务优先级（1: 低, 2: 中, 3: 高，选填）',
           },
-          reminderOption: {
-            type: 'string',
-            description: '提前提醒选项，例如 none/5min/15min/30min/1hour/1day（选填）',
-          },
-          repeatOption: {
-            type: 'string',
-            description: '重复规则，例如 none/daily/workday/weekly/monthly（选填）',
-          },
           noTimeConfirmed: {
             type: 'boolean',
             description: '用户是否已明确说明不需要设置时间/不设时间（选填）',
@@ -113,8 +105,6 @@ const LOCAL_TOOLS: ToolDefinition[] = [
                 startTime: { type: 'string', description: '开始时间 YYYY-MM-DDTHH:mm' },
                 dueDate: { type: 'string', description: '截止时间 YYYY-MM-DDTHH:mm' },
                 priority: { type: 'number', description: '优先级 1/2/3' },
-                reminderOption: { type: 'string', description: '提醒规则' },
-                repeatOption: { type: 'string', description: '重复规则' },
               },
               required: ['title'],
             },
@@ -132,7 +122,7 @@ const LOCAL_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'update_task',
-      description: '修改用户 Todolist 中某项已有任务的标题、分类、开始时间、截止时间、优先级、提醒或重复规则。',
+      description: '修改用户 Todolist 中某项已有任务的标题、分类、开始时间、截止时间或优先级。',
       parameters: {
         type: 'object',
         properties: {
@@ -159,14 +149,6 @@ const LOCAL_TOOLS: ToolDefinition[] = [
           newPriority: {
             type: 'number',
             description: '修改后的优先级 1:低 / 2:中 / 3:高（选填）',
-          },
-          newReminderOption: {
-            type: 'string',
-            description: '修改后的提醒选项（选填）',
-          },
-          newRepeatOption: {
-            type: 'string',
-            description: '修改后的重复规则（选填）',
           },
         },
         required: ['taskTitleOrId'],
@@ -444,8 +426,6 @@ function formatTodoDetail(t: Todo) {
     dueDate: t.dueDate || undefined,
     timeText: t.timeText || undefined,
     priority: t.priority === 3 ? '高' : t.priority === 2 ? '中' : t.priority === 1 ? '低' : '无',
-    reminderOption: t.reminderOption || undefined,
-    repeatOption: t.repeatOption || undefined,
     completedAt: t.completedAt || undefined,
     gitUrl: t.gitUrl || undefined,
   };
@@ -584,7 +564,7 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
   const dateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日 星期${['日', '一', '二', '三', '四', '五', '六'][now.getDay()]}`;
 
   const system = apiKey.value.trim()
-    ? `你是 Todolist 中的待办助手，由用户配置的大模型服务驱动。当前接入地址：${cfg.endpoint}；当前使用模型：${cfg.model}。当前时间：${dateStr}。\n【身份如实准则】：当被问到你是什么模型、由谁驱动、基于什么架构或框架时，请如实说明你是由用户配置的大模型服务（接入地址 ${cfg.endpoint}、模型 ${cfg.model}）驱动的待办助手，不要自称使用任何未用户配置或虚构的框架、架构或底层模型。\n【工具能力】：你可为用户调用丰富的待办管理与网络工具：\n- create_task: 新建单条待办任务（支持标题、分类、开始时间、截止时间、优先级1-3、提醒与重复）；\n- batch_create_tasks: 批量新建多条待办任务（适合用户提出多项规划或任务列表时一次性创建）；\n- update_task: 修改已有待办的标题、分类、起止时间、截止时间、优先级、提醒或重复；\n- complete_task: 标记待办任务为已完成；\n- reopen_task: 重新打开/激活已完成的待办任务，将其恢复为未完成状态；\n- delete_task: 从列表中删除指定待办；\n- clear_completed_tasks: 一键清空所有已完成的历史任务；\n- restore_last_deleted: 撤销最近一次删除操作，恢复刚被删除的任务；\n- query_tasks: 灵活查询/筛选任务（支持按日期范围 today/tomorrow/this_week/all/具体日期、按状态 pending/completed/all、按分类、按关键词、优先级和数量限制检索）；\n- get_today_tasks: 快速查询今日任务详情与完成率；\n- web_search / fetch_webpage: 联网检索与网页深度阅读。\n【新建任务时间确认准则（核心规则，务必严格遵守）】：\n- 当用户要求创建/新建待办任务（例如“帮我建一个任务：写周报”、“添加待办买菜”）时：\n  1) 检查用户输入中是否包含了明确的【开始时间】或【结束/截止时间】（包括“明天上午10点到12点”、“今天下午3点前完成”、“从9月5日到9月8日”等具体或相对时间）；\n  2) 如果用户【未提供开始时间与结束时间】且未说明“不设时间”：\n     - 严禁擅自直接调用 create_task 或 batch_create_tasks；\n     - 必须先在回复中礼貌询问用户，例如：“好的，请问「[任务名称]」的**开始时间**和**截止/结束时间**分别安排在什么时候呢？（例如：今天下午 14:00 至 17:00，或明天截止；如果不需要设置时间也可直接告诉我）”；\n  3) 只有当用户在初次请求中已包含时间、在后续回复中补充了时间，或者用户明确表示“不需要时间/不用设时间”时，才调用 create_task / batch_create_tasks 完成创建。\n【操作准则与安全性】：\n1) 当用户提出增、删、改、查、重新激活、批量添加、撤销恢复或清空已完成的诉求时，请在满足前置条件后直接调用对应工具执行；\n2) 消歧确认：若工具返回 ambiguous（匹配到多条候选任务），请向用户友好列出候选任务并请求用户指明具体要操作哪一项，切勿擅自修改或删除；\n3) 回答请准确、专业、友好并使用中文。\n【排版要求（务必遵守）】：回答务必注重条理与可读性。\n1) 如果内容包含多个方面或步骤，先用 **加粗小节标题**（如 **一、要点分析**、**二、建议**）分节；\n2) 并列要点一律用行首符号 - 或有序 1. 2. 列表逐条列出，不要把它们吞进同一句话里；\n3) 段落与条目之间用空行分隔，不要输出连续一整段拥挤的文字墙；\n4) 不确定或有取舍时给出简短小结；内容简短时 1-3 条即可，不必强行堆砌。`
+    ? `你是 Todolist 中的待办助手，由用户配置的大模型服务驱动。当前接入地址：${cfg.endpoint}；当前使用模型：${cfg.model}。当前时间：${dateStr}。\n【身份如实准则】：当被问到你是什么模型、由谁驱动、基于什么架构或框架时，请如实说明你是由用户配置的大模型服务（接入地址 ${cfg.endpoint}、模型 ${cfg.model}）驱动的待办助手，不要自称使用任何未用户配置或虚构的框架、架构或底层模型。\n【工具能力】：你可为用户调用丰富的待办管理与网络工具：\n- create_task: 新建单条待办任务（支持标题、分类、开始时间、截止时间、优先级1-3）；\n- batch_create_tasks: 批量新建多条待办任务（适合用户提出多项规划或任务列表时一次性创建）；\n- update_task: 修改已有待办的标题、分类、起止时间、截止时间或优先级；\n- complete_task: 标记待办任务为已完成；\n- reopen_task: 重新打开/激活已完成的待办任务，将其恢复为未完成状态；\n- delete_task: 从列表中删除指定待办；\n- clear_completed_tasks: 一键清空所有已完成的历史任务；\n- restore_last_deleted: 撤销最近一次删除操作，恢复刚被删除的任务；\n- query_tasks: 灵活查询/筛选任务（支持按日期范围 today/tomorrow/this_week/all/具体日期、按状态 pending/completed/all、按分类、按关键词、优先级和数量限制检索）；\n- get_today_tasks: 快速查询今日任务详情与完成率；\n- web_search / fetch_webpage: 联网检索与网页深度阅读。\n【新建任务时间确认准则（核心规则，务必严格遵守）】：\n- 当用户要求创建/新建待办任务（例如“帮我建一个任务：写周报”、“添加待办买菜”）时：\n  1) 检查用户输入中是否包含了明确的【开始时间】或【结束/截止时间】（包括“明天上午10点到12点”、“今天下午3点前完成”、“从9月5日到9月8日”等具体或相对时间）；\n  2) 如果用户【未提供开始时间与结束时间】且未说明“不设时间”：\n     - 严禁擅自直接调用 create_task 或 batch_create_tasks；\n     - 必须先在回复中礼貌询问用户，例如：“好的，请问「[任务名称]」的**开始时间**和**截止/结束时间**分别安排在什么时候呢？（例如：今天下午 14:00 至 17:00，或明天截止；如果不需要设置时间也可直接告诉我）”；\n  3) 只有当用户在初次请求中已包含时间、在后续回复中补充了时间，或者用户明确表示“不需要时间/不用设时间”时，才调用 create_task / batch_create_tasks 完成创建。\n【操作准则与安全性】：\n1) 当用户提出增、删、改、查、重新激活、批量添加、撤销恢复或清空已完成的诉求时，请在满足前置条件后直接调用对应工具执行；\n2) 消歧确认：若工具返回 ambiguous（匹配到多条候选任务），请向用户友好列出候选任务并请求用户指明具体要操作哪一项，切勿擅自修改或删除；\n3) 回答请准确、专业、友好并使用中文。\n【排版要求（务必遵守）】：回答务必注重条理与可读性。\n1) 如果内容包含多个方面或步骤，先用 **加粗小节标题**（如 **一、要点分析**、**二、建议**）分节；\n2) 并列要点一律用行首符号 - 或有序 1. 2. 列表逐条列出，不要把它们吞进同一句话里；\n3) 段落与条目之间用空行分隔，不要输出连续一整段拥挤的文字墙；\n4) 不确定或有取舍时给出简短小结；内容简短时 1-3 条即可，不必强行堆砌。`
     : '你是 Todolist 的待办助手。当前未配置大模型 API，无法进行通用问答与在线推理；当被问到你是什么模型或由什么驱动时，请如实说明当前由软件内置规则驱动，并友好提醒用户先点击左下角 ⚙️「设置」完成模型配置，即可获得模型驱动的完整问答。如果你在生成日报，请按有结构、分段、分点的条理输出。';
 
   // Only feed the most recent turns to the model, so very long chats don't
@@ -685,8 +665,6 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
           const rawDueDate = (args.dueDate || '').trim();
           const noTimeConfirmed = Boolean(args.noTimeConfirmed);
           const priority = args.priority !== undefined ? Number(args.priority) : undefined;
-          const reminderOption = (args.reminderOption || '').trim() || undefined;
-          const repeatOption = (args.repeatOption || '').trim() || undefined;
 
           const step: AgentStep = {
             name: 'create_task',
@@ -734,8 +712,6 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
               startTime,
               dueDate,
               priority,
-              reminderOption,
-              repeatOption,
             });
             step.status = 'done';
             step.title = `已创建待办任务：「${title}」${category ? ` · ${category}` : ''}${hasDup ? ' (已有同名)' : ''}`;
@@ -768,8 +744,6 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
                 startTime: sTime || (dDate ? getCurrentNowISO() : undefined),
                 dueDate: dDate || undefined,
                 priority: x.priority !== undefined ? Number(x.priority) : undefined,
-                reminderOption: (x.reminderOption || '').trim() || undefined,
-                repeatOption: (x.repeatOption || '').trim() || undefined,
                 hasExplicitTime: Boolean(sTime || dDate),
               };
             });
@@ -830,8 +804,6 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
           const newStartTime = (args.newStartTime || '').trim();
           const newDueDate = (args.newDueDate || '').trim();
           const newPriority = args.newPriority !== undefined ? Number(args.newPriority) : undefined;
-          const newReminderOption = (args.newReminderOption || '').trim();
-          const newRepeatOption = (args.newRepeatOption || '').trim();
 
           const step: AgentStep = {
             name: 'update_task',
@@ -870,8 +842,6 @@ async function streamInto(tail: LocalMsg, extraContext: ChatMessage[] = []): Pro
               newStartTime: newStartTime || undefined,
               newDueDate: newDueDate || undefined,
               newPriority: newPriority !== undefined ? newPriority : undefined,
-              newReminderOption: newReminderOption || undefined,
-              newRepeatOption: newRepeatOption || undefined,
             });
             step.status = 'done';
             step.title = `已修改待办任务：「${newTitle || target.title}」`;

@@ -4,9 +4,6 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { Todo } from './types';
 import { useTheme } from './composables/useTheme';
-import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
-
-// Import components
 import TitleBar from './components/TitleBar.vue';
 import Sidebar from './components/Sidebar.vue';
 import SettingsModal from './components/SettingsModal.vue';
@@ -71,37 +68,6 @@ const saveTodos = async () => {
   }
 };
 
-const playBeep = () => {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
-    notes.forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      
-      const startTime = ctx.currentTime + i * 0.12;
-      
-      gain.gain.setValueAtTime(0, startTime);
-      gain.gain.linearRampToValueAtTime(0.1, startTime + 0.05);
-      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4);
-      
-      osc.start(startTime);
-      osc.stop(startTime + 0.4);
-    });
-
-    setTimeout(() => {
-      ctx.close().catch(() => {});
-    }, 1000);
-  } catch (e) {
-    console.warn('Audio play failed', e);
-  }
-};
-
 onMounted(async () => {
   loadTodos();
   initTheme();
@@ -131,66 +97,10 @@ onMounted(async () => {
   window.addEventListener('focus', syncCurrentTime);
   document.addEventListener('visibilitychange', syncCurrentTime);
 
-  // Notification checker & Time syncer
-  checkInterval = window.setInterval(async () => {
+  // Time syncer
+  checkInterval = window.setInterval(() => {
     syncCurrentTime();
-    const now = nowRef.value.getTime();
-    let hasUpdates = false;
-    
-    // Check system notification permission
-    let permissionGranted = await isPermissionGranted();
-    if (!permissionGranted) {
-      const permission = await requestPermission();
-      permissionGranted = permission === 'granted';
-    }
-    
-    todos.value.forEach(task => {
-      if (!task.completed && task.notify && task.dueDate) {
-        const dueTime = new Date(task.dueDate).getTime();
-        const diffMinutes = (dueTime - now) / (1000 * 60);
-        
-        let triggerMins = 15;
-        if (task.reminderOption === '30 分钟前') triggerMins = 30;
-        else if (task.reminderOption === '1 小时前') triggerMins = 60;
-        
-        let shouldNotify = false;
-        
-        // Initial notification
-        if (!task.notified && diffMinutes <= triggerMins && diffMinutes > -5) {
-          shouldNotify = true;
-        } 
-        // Repeating notification
-        else if (task.notified && task.repeatOption && task.repeatOption !== '不重复' && task.lastNotifiedTime) {
-          const repeatMins = task.repeatOption === '每十分钟' ? 10 : 5;
-          const minsSinceLastNotify = (now - task.lastNotifiedTime) / (1000 * 60);
-          if (minsSinceLastNotify >= repeatMins) {
-            shouldNotify = true;
-          }
-        }
-        
-        if (shouldNotify) {
-          const minsStr = Math.max(0, Math.round(diffMinutes));
-          const msg = diffMinutes <= 0 ? `「${task.title}」已经到期啦！` : `「${task.title}」还有不到 ${minsStr} 分钟就要到期啦！`;
-          
-          // 1. Sound
-          playBeep();
-          
-          // 2. System Desktop Notification
-          if (permissionGranted) {
-            sendNotification({ title: 'Todolist 任务临期提醒', body: msg, sound: 'default' });
-          }
-          
-          task.notified = true;
-          task.lastNotifiedTime = now;
-          hasUpdates = true;
-        }
-      }
-    });
-    
-    if (hasUpdates) {
-      saveTodos();
-    }
-  }, 5000);
+  }, 10000);
 });
 
 const selectedTaskId = ref<string | null>(null);
@@ -481,28 +391,7 @@ const getCurrentNowISO = () => {
   return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
 };
 
-const normalizeReminderOption = (opt?: string): string | undefined => {
-  if (!opt) return undefined;
-  const s = opt.toLowerCase().trim();
-  if (['none', '无', '不提醒', '0'].includes(s)) return 'none';
-  if (['5min', '5分钟', '5m', '提前5分钟'].includes(s)) return '5min';
-  if (['15min', '15分钟', '15m', '提前15分钟'].includes(s)) return '15min';
-  if (['30min', '30分钟', '30m', '提前30分钟', '半小时'].includes(s)) return '30min';
-  if (['1hour', '1小时', '1h', '60min', '提前1小时'].includes(s)) return '1hour';
-  if (['1day', '1天', '1d', '24hours', '提前1天'].includes(s)) return '1day';
-  return opt;
-};
 
-const normalizeRepeatOption = (opt?: string): string | undefined => {
-  if (!opt) return undefined;
-  const s = opt.toLowerCase().trim();
-  if (['none', '不重复', '无'].includes(s)) return 'none';
-  if (['daily', '每天', '每日', 'day'].includes(s)) return 'daily';
-  if (['workday', '工作日'].includes(s)) return 'workday';
-  if (['weekly', '每周', '每星期', 'week'].includes(s)) return 'weekly';
-  if (['monthly', '每月', 'month'].includes(s)) return 'monthly';
-  return opt;
-};
 
 const normalizePriority = (p?: any): number | undefined => {
   if (p === undefined || p === null) return undefined;
@@ -523,8 +412,6 @@ const handleCreateTaskFromAI = (data: {
   dueDate?: string;
   startTime?: string;
   priority?: any;
-  reminderOption?: string;
-  repeatOption?: string;
 }) => {
   const finalStartTime = (data.startTime || '').trim() || getCurrentNowISO();
   const newTask: Todo = {
@@ -536,8 +423,6 @@ const handleCreateTaskFromAI = (data: {
     dueDate: data.dueDate || undefined,
     timeText: formatTimeText(data.dueDate, finalStartTime),
     priority: normalizePriority(data.priority),
-    reminderOption: normalizeReminderOption(data.reminderOption),
-    repeatOption: normalizeRepeatOption(data.repeatOption),
   };
   todos.value.push(newTask);
   saveTodos();
@@ -551,8 +436,6 @@ const handleBatchCreateTasksFromAI = (
     dueDate?: string;
     startTime?: string;
     priority?: any;
-    reminderOption?: string;
-    repeatOption?: string;
   }>
 ) => {
   const createdList: Todo[] = [];
@@ -567,8 +450,6 @@ const handleBatchCreateTasksFromAI = (
       dueDate: data.dueDate || undefined,
       timeText: formatTimeText(data.dueDate, finalStartTime),
       priority: normalizePriority(data.priority),
-      reminderOption: normalizeReminderOption(data.reminderOption),
-      repeatOption: normalizeRepeatOption(data.repeatOption),
     };
     todos.value.push(newTask);
     createdList.push(newTask);
@@ -689,8 +570,6 @@ const handleUpdateTaskFromAI = (data: {
   newDueDate?: string;
   newStartTime?: string;
   newPriority?: any;
-  newReminderOption?: string;
-  newRepeatOption?: string;
 }): Todo | null => {
   const index = findTaskIndexByAI(data.taskTitleOrId);
   if (index !== -1) {
@@ -708,12 +587,6 @@ const handleUpdateTaskFromAI = (data: {
     }
     if (data.newPriority !== undefined) {
       task.priority = normalizePriority(data.newPriority);
-    }
-    if (data.newReminderOption !== undefined) {
-      task.reminderOption = normalizeReminderOption(data.newReminderOption);
-    }
-    if (data.newRepeatOption !== undefined) {
-      task.repeatOption = normalizeRepeatOption(data.newRepeatOption);
     }
     saveTodos();
     return task;
