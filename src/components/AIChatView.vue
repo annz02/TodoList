@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import type { Todo } from '../types';
 import { useAIConfig } from '../composables/useAIConfig';
@@ -517,6 +517,7 @@ const messages = conversations.messages;
 const nextMessageId = conversations.nextMessageId;
 const refreshConversationTitle = conversations.refreshLabelIfUntitled;
 const scroller = ref<HTMLElement | null>(null);
+const chatContainerEl = ref<HTMLElement | null>(null);
 const textareaEl = ref<HTMLTextAreaElement | null>(null);
 
 // Auto-grow the input textarea up to its CSS max-height, then scroll internally.
@@ -528,10 +529,45 @@ const autoGrowTextarea = () => {
   el.scrollTop = 0;
 };
 
-const scrollToBottom = async () => {
-  await nextTick();
-  scroller.value?.scrollTo({ top: scroller.value.scrollHeight });
+const isAutoScrollEnabled = ref(true);
+let resizeObserver: ResizeObserver | null = null;
+
+const onScroll = () => {
+  const el = scroller.value;
+  if (!el) return;
+  // If the user scrolled up (more than 48px away from bottom), disable auto-scroll
+  const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+  isAutoScrollEnabled.value = distanceToBottom <= 48;
 };
+
+const scrollToBottom = async (force = false) => {
+  if (!force && !isAutoScrollEnabled.value) return;
+  await nextTick();
+  requestAnimationFrame(() => {
+    if (scroller.value) {
+      scroller.value.scrollTop = scroller.value.scrollHeight;
+    }
+  });
+};
+
+onMounted(() => {
+  if (chatContainerEl.value && typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(() => {
+      if (isAutoScrollEnabled.value && scroller.value) {
+        scroller.value.scrollTop = scroller.value.scrollHeight;
+      }
+    });
+    resizeObserver.observe(chatContainerEl.value);
+  }
+  scrollToBottom(true);
+});
+
+onUnmounted(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+    resizeObserver = null;
+  }
+});
 
 // Clear per-conversation transient UI when switching to another conversation.
 watch(
@@ -1318,19 +1354,20 @@ const sendMessage = async () => {
   if (!text || isWaiting.value) return;
   if (abortCtrl.value) return;
 
+  isAutoScrollEnabled.value = true;
   input.value = '';
   autoGrowTextarea();
   messages.value.push({ id: nextMessageId(), role: 'user', content: text });
   refreshConversationTitle();
   const tail: LocalMsg = { id: nextMessageId(), role: 'assistant', content: '', sources: [], steps: [] };
   messages.value.push(tail);
-  await scrollToBottom();
+  await scrollToBottom(true);
 
   if (apiKey.value.trim()) {
     await streamInto(tail);
   } else {
     tail.content = '（尚未配置 API Key，请先点击左下角 ⚙️「设置」完成模型配置后即可与我对话；通用问答需要模型支持。）';
-    await scrollToBottom();
+    await scrollToBottom(true);
   }
 };
 
@@ -1370,14 +1407,16 @@ const startNewConversation = () => {
   if (isWaiting.value) return;
   conversations.newConversation();
   historyOpen.value = false;
-  nextTick(() => scrollToBottom());
+  isAutoScrollEnabled.value = true;
+  scrollToBottom(true);
 };
 
 const switchConversation = (id: string) => {
   if (isWaiting.value) return;
   conversations.selectConversation(id);
   historyOpen.value = false;
-  nextTick(() => scrollToBottom());
+  isAutoScrollEnabled.value = true;
+  scrollToBottom(true);
 };
 
 // Pick a model from the chat footer chip dropdown (immediate, live).
@@ -1449,8 +1488,8 @@ const currentTypingMsg = computed(() =>
     </div>
 
       <!-- Conversation -->
-      <div ref="scroller" class="chat-scroll">
-        <div class="chat-messages">
+      <div ref="scroller" class="chat-scroll" @scroll="onScroll">
+        <div ref="chatContainerEl" class="chat-messages">
           <div v-for="msg in messages" :key="msg.id" class="msg-row" :class="msg.role">
             <div class="avatar" :class="msg.role">
               <!-- 精致现代 Bot 机器人头像 -->
