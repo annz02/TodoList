@@ -83,9 +83,9 @@ onMounted(async () => {
 }
 
 :global(.dark) .app-titlebar {
-  --bg-titlebar: #111827;
+  --bg-titlebar: #12151b;
   --text-titlebar: #e2e8f0;
-  --border-titlebar: rgba(255, 255, 255, 0.08);
+  --border-titlebar: #232836;
 }
 
 .titlebar-left {

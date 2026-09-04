@@ -89,7 +89,7 @@ body {
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background-color: #334155;
+  background-color: #2b3242;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
@@ -463,16 +463,16 @@ body {
 /* Dark Mode */
 .dark {
   color-scheme: dark;
-  --bg-main: #0f172a;
-  --bg-sidebar: #1e293b;
-  --border-color: #334155;
+  --bg-main: #12151b;
+  --bg-sidebar: #181c24;
+  --border-color: #262c38;
   --text-main: #f8fafc;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
 }
 
 .dark .task-item {
-  background-color: #1e293b;
+  background-color: #181c24;
 }
 .dark .task-item:hover {
   background-color: var(--primary-light);
@@ -503,15 +503,15 @@ body {
 }
 
 .dark .task-right .action-btn:hover {
-  background-color: #334155;
+  background-color: #272d3b;
 }
 
 .dark .add-task-input {
-  background-color: #1e293b;
+  background-color: #181c24;
   color: #f8fafc;
 }
 .dark .search-box input {
-  background-color: #1e293b;
+  background-color: #181c24;
   color: #f8fafc;
 }
 

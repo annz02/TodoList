@@ -699,7 +699,7 @@ const handleManualCheck = async () => {
 
 .nav-item:hover:not(.active) {
   background: color-mix(in srgb, var(--primary-color) 8%, transparent);
-  color: var(--primary-color);
+  color: var(--text-main);
 }
 
 .nav-item.active {
@@ -726,12 +726,12 @@ const handleManualCheck = async () => {
 }
 
 :global(.dark) .settings-nav .nav-item:hover:not(.active) {
-  background: color-mix(in srgb, var(--primary-color) 12%, transparent);
-  color: var(--primary-color);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
 }
 
 :global(.dark) .settings-nav .nav-item:hover:not(.active) svg {
-  color: var(--primary-color);
+  color: #ffffff;
 }
 
 :global(.dark) .settings-nav .nav-item.active {

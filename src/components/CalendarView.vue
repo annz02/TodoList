@@ -861,7 +861,7 @@ const weekdaysHeader = [
 .task-card-modal-backdrop {
   position: fixed;
   inset: 0;
-  background-color: rgba(15, 23, 42, 0.45);
+  background-color: rgba(18, 21, 27, 0.45);
   backdrop-filter: blur(5px);
   z-index: 1000;
   display: flex;
@@ -1011,7 +1011,7 @@ const weekdaysHeader = [
 }
 
 :global(.dark) .day-cell.other-month {
-  background-color: #1a2332;
+  background-color: #13161e;
 }
 
 :global(.dark) .day-cell:hover {
