@@ -1,6 +1,10 @@
 # TodoList
 
 <p align="center">
+  <img src="public/logo.png" alt="TodoList Logo" width="160">
+</p>
+
+<p align="center">
   <a href="https://github.com/annz02/TodoList-Ann/releases"><img src="https://img.shields.io/github/v/release/annz02/TodoList-Ann?style=flat-square&color=3b82f6" alt="Release"></a>
   <a href="https://github.com/annz02/TodoList-Ann/releases"><img src="https://img.shields.io/github/downloads/annz02/TodoList-Ann/total?style=flat-square&color=10b981" alt="Downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/annz02/TodoList-Ann?style=flat-square&color=8b5cf6" alt="License"></a>
