@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { listen } from '@tauri-apps/api/event';
 import type { Todo } from './types';
 import { useTheme } from './composables/useTheme';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 
 // Import components
+import TitleBar from './components/TitleBar.vue';
 import Sidebar from './components/Sidebar.vue';
 import SettingsModal from './components/SettingsModal.vue';
 import TaskItem from './components/TaskItem.vue';
@@ -105,7 +105,6 @@ const playBeep = () => {
 onMounted(async () => {
   loadTodos();
   initTheme();
-  getCurrentWindow().maximize();
 
   // Startup auto check for updates if enabled
   if (autoCheckUpdate.value) {
@@ -572,84 +571,43 @@ const handleUpdateTaskFromAI = (data: {
   return null;
 };
 
-const minimizeWindow = () => getCurrentWindow().minimize();
-const toggleMaximize = async () => {
-  await getCurrentWindow().toggleMaximize();
-  isMaximized.value = await getCurrentWindow().isMaximized();
-};
-const closeWindow = () => getCurrentWindow().close();
-
-const isMaximized = ref(false);
-
-onMounted(async () => {
-  try {
-    isMaximized.value = await getCurrentWindow().isMaximized();
-    await getCurrentWindow().onResized(async () => {
-      isMaximized.value = await getCurrentWindow().isMaximized();
-    });
-  } catch (e) {
-    console.error('Failed to init window state:', e);
-  }
-});
 </script>
 
 <template>
-  <Sidebar 
-    v-model:activeCategory="activeCategory"
-    :todayCount="todayCount"
-    :completedCount="completedCount"
-    :allCount="allCount"
-    @add-task-clicked="() => handleAddTaskClick()"
-    @open-settings="handleOpenSettings('general')"
-  />
+  <div class="app-layout">
+    <TitleBar title="Todolist" />
+    <div class="app-body">
+      <Sidebar 
+        v-model:activeCategory="activeCategory"
+        :todayCount="todayCount"
+        :completedCount="completedCount"
+        :allCount="allCount"
+        @add-task-clicked="() => handleAddTaskClick()"
+        @open-settings="handleOpenSettings('general')"
+      />
 
-  <!-- Main Content -->
-  <main class="main-content" style="position: relative;">
-    <div data-tauri-drag-region style="position: absolute; top: 0; left: 0; right: 0; height: 64px; z-index: 10;"></div>
-    <div class="window-controls" style="z-index: 10000;">
-      <button @click="minimizeWindow" class="win-btn" title="最小化" tabindex="-1">
-        <svg width="10" height="10" viewBox="0 0 10 10">
-          <line x1="0" y1="5" x2="10" y2="5" stroke="currentColor" stroke-width="1"></line>
-        </svg>
-      </button>
-      <button @click="toggleMaximize" class="win-btn" :title="isMaximized ? '向下还原' : '最大化'" tabindex="-1">
-        <!-- 还原图标 (两个重叠框) -->
-        <svg v-if="isMaximized" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
-          <path d="M2.5 7.5H0.5V0.5H7.5V2.5"></path>
-          <rect x="2.5" y="2.5" width="7" height="7"></rect>
-        </svg>
-        <!-- 最大化图标 (单个方框) -->
-        <svg v-else width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
-          <rect x="0.5" y="0.5" width="9" height="9"></rect>
-        </svg>
-      </button>
-      <button @click="closeWindow" class="win-btn close-win-btn" title="关闭" tabindex="-1">
-        <svg width="10" height="10" viewBox="0 0 10 10">
-          <line x1="0.5" y1="0.5" x2="9.5" y2="9.5" stroke="currentColor" stroke-width="1"></line>
-          <line x1="9.5" y1="0.5" x2="0.5" y2="9.5" stroke="currentColor" stroke-width="1"></line>
-        </svg>
-      </button>
-    </div>
-    <header class="header" :class="{ 'ai-chat-mode': activeCategory === 'ai-chat' }">
-      <div class="header-left" data-tauri-drag-region style="flex-grow: 1; z-index: 10;">
-        <div style="pointer-events: none;">
-          <h1>
-            {{ activeCategory === 'today' ? '今天' : activeCategory === 'completed' ? '已完成' : activeCategory === 'calendar' ? '日历视图' : activeCategory === 'ai-chat' ? 'AI 助手' : '全部任务' }}
-          </h1>
-          <div class="date" v-if="headerSubTitle">{{ headerSubTitle }}</div>
-        </div>
-      </div>
-      <div class="header-right" style="z-index: 11;" v-if="activeCategory !== 'ai-chat'">
-        <div class="search-box">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          <input type="text" placeholder="搜索任务..." v-model="searchQuery">
-        </div>
-        <button class="new-task-btn" @click="() => handleAddTaskClick()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          新建任务
-        </button>
-      </div>
-    </header>
+      <!-- Main Content -->
+      <main class="main-content">
+        <header class="header" :class="{ 'ai-chat-mode': activeCategory === 'ai-chat' }">
+          <div class="header-left">
+            <div>
+              <h1>
+                {{ activeCategory === 'today' ? '今天' : activeCategory === 'completed' ? '已完成' : activeCategory === 'calendar' ? '日历视图' : activeCategory === 'ai-chat' ? 'AI 助手' : '全部任务' }}
+              </h1>
+              <div class="date" v-if="headerSubTitle">{{ headerSubTitle }}</div>
+            </div>
+          </div>
+          <div class="header-right" v-if="activeCategory !== 'ai-chat'">
+            <div class="search-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" placeholder="搜索任务..." v-model="searchQuery">
+            </div>
+            <button class="new-task-btn" @click="() => handleAddTaskClick()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              新建任务
+            </button>
+          </div>
+        </header>
 
     <CalendarView 
       v-if="activeCategory === 'calendar'"
@@ -739,6 +697,8 @@ onMounted(async () => {
       </div>
     </div>
   </main>
+</div>
+</div>
 
   <SettingsModal
     :show="showSettingsModal"
