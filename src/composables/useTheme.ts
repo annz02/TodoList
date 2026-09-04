@@ -1,16 +1,16 @@
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
-const themeMode = ref(localStorage.getItem('themeMode') || 'system');
-const primaryColor = ref(localStorage.getItem('primaryColor') || '#3b82f6');
+const themeMode = ref(localStorage.getItem('themeMode') || 'dark');
+const primaryColor = ref(localStorage.getItem('primaryColor') || '#10b981');
 
 export function useTheme() {
 
   const themeColors = [
-    '#3b82f6', // Blue
-    '#10b981', // Emerald
-    '#f59e0b', // Amber
-    '#ec4899', // Pink
+    '#10b981', // Emerald (翡翠绿)
+    '#ec4899', // Pink (玫瑰粉)
+    '#3b82f6', // Blue (经典蓝)
+    '#f59e0b', // Amber (琥珀橙)
   ];
 
   const getIsDark = () => {
@@ -19,7 +19,7 @@ export function useTheme() {
     if (typeof window !== 'undefined' && window.matchMedia) {
       return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
-    return false;
+    return true;
   };
 
   const applyTheme = () => {

@@ -8,9 +8,9 @@
     <script>
       (function () {
         try {
-          var mode = localStorage.getItem('themeMode') || 'system';
-          var color = localStorage.getItem('primaryColor');
-          var isDark = false;
+          var mode = localStorage.getItem('themeMode') || 'dark';
+          var color = localStorage.getItem('primaryColor') || '#10b981';
+          var isDark = true;
           if (mode === 'dark') {
             isDark = true;
           } else if (mode === 'light') {
@@ -23,9 +23,7 @@
           } else {
             document.documentElement.classList.remove('dark');
           }
-          if (color) {
-            document.documentElement.style.setProperty('--primary-color', color);
-          }
+          document.documentElement.style.setProperty('--primary-color', color);
         } catch (e) {}
       })();
     </script>

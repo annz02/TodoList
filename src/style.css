@@ -3,7 +3,7 @@
   --bg-main: #ffffff;
   --bg-sidebar: #f8fafc;
   --border-color: #e2e8f0;
-  --primary-color: #3b82f6;
+  --primary-color: #10b981;
   --primary-hover: color-mix(in srgb, var(--primary-color) 85%, black);
   --primary-light: color-mix(in srgb, var(--primary-color) 15%, transparent);
   --text-main: #0f172a;

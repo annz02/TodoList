@@ -121,11 +121,10 @@ const handleSaveAIConfig = () => {
 };
 
 const colorNames: Record<string, string> = {
-  '#3b82f6': '经典蓝',
-  '#6366f1': '罗兰紫',
   '#10b981': '翡翠绿',
-  '#f59e0b': '琥珀橙',
   '#ec4899': '玫瑰粉',
+  '#3b82f6': '经典蓝',
+  '#f59e0b': '琥珀橙',
 };
 
 const handleManualCheck = async () => {
