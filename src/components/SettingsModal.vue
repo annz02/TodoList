@@ -340,8 +340,8 @@ const handleManualCheck = async () => {
                 <div class="setting-row">
                   <div class="setting-info">
                     <div class="info-text">
-                      <span class="card-title">新建任务</span>
-                      <span class="card-desc">呼出新建任务卡片</span>
+                      <span class="card-title">添加任务</span>
+                      <span class="card-desc">呼出添加任务卡片</span>
                     </div>
                   </div>
                   <div class="key-caps">

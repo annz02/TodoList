@@ -286,7 +286,7 @@ export function useAIAssistant(todos: Ref<Todo[]>) {
   function builtInSummary(): string {
     const s = stats.value;
     if (s.todayTasks.length === 0) {
-      return `**📝 AI 工作日报**\n\n**一、 ✅ 今日完成与推进工作汇总**\n\n  Todolist 分类下今日暂无记录的关键任务。\n\n---\n\n**二、 📊 分类进度追踪**\n\n  - Todolist 分类：今日共纳入0项任务，已完成0项，完成占比0%。\n\n---\n\n**三、 📌 待跟进重点事项**\n\n  - 点击 **新建任务** 开启今日第一条工作规划。`;
+      return `**📝 AI 工作日报**\n\n**一、 ✅ 今日完成与推进工作汇总**\n\n  Todolist 分类下今日暂无记录的关键任务。\n\n---\n\n**二、 📊 分类进度追踪**\n\n  - Todolist 分类：今日共纳入0项任务，已完成0项，完成占比0%。\n\n---\n\n**三、 📌 待跟进重点事项**\n\n  - 点击 **添加任务** 开启今日第一条工作规划。`;
     }
 
     const workTasks = s.todayTasks.filter((t) => t.completed || t.gitUrl);

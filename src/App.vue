@@ -603,7 +603,7 @@ const handleUpdateTaskFromAI = (data: {
             </div>
             <button class="new-task-btn" @click="() => handleAddTaskClick()">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              新建任务
+              添加任务
             </button>
           </div>
         </header>
@@ -644,7 +644,7 @@ const handleUpdateTaskFromAI = (data: {
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            <span class="group-title">新建任务</span>
+            <span class="group-title">添加任务</span>
           </div>
           <div class="group-divider"></div>
         </div>

@@ -86,7 +86,7 @@ onUnmounted(() => {
     <!-- Header: Same structure -->
     <div class="card-header">
       <div class="header-left">
-        <div class="circle-checkbox" title="新建任务"></div>
+        <div class="circle-checkbox" title="添加任务"></div>
         <input 
           type="text" 
           v-model="title" 
