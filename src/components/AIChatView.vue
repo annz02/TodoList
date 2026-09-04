@@ -1057,7 +1057,7 @@ const currentTypingMsg = computed(() =>
               title="停止生成"
               @click="stopGenerating"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+              <span class="stop-inner-square"></span>
             </button>
             <button
               v-else
@@ -1559,8 +1559,25 @@ const currentTypingMsg = computed(() =>
 }
 .send-circle:hover:not(:disabled) { filter: brightness(1.06); }
 .send-circle:disabled { opacity: .4; cursor: not-allowed; }
-.send-circle.stop { background: var(--danger-color, #ef4444); }
-.send-circle.stop:hover { filter: none; }
+.send-circle.stop {
+  background: color-mix(in srgb, var(--text-main) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+}
+.send-circle.stop:hover {
+  background: color-mix(in srgb, var(--text-main) 18%, transparent);
+  filter: none;
+}
+.stop-inner-square {
+  width: 12px;
+  height: 12px;
+  background-color: var(--primary-color);
+  border-radius: 2.5px;
+  display: block;
+  transition: transform 0.15s ease, background-color 0.2s ease;
+}
+.send-circle.stop:hover .stop-inner-square {
+  transform: scale(0.92);
+}
 
 .model-dropdown {
   position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 30;

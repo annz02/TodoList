@@ -573,8 +573,24 @@ const handleUpdateTaskFromAI = (data: {
 };
 
 const minimizeWindow = () => getCurrentWindow().minimize();
-const toggleMaximize = () => getCurrentWindow().toggleMaximize();
+const toggleMaximize = async () => {
+  await getCurrentWindow().toggleMaximize();
+  isMaximized.value = await getCurrentWindow().isMaximized();
+};
 const closeWindow = () => getCurrentWindow().close();
+
+const isMaximized = ref(false);
+
+onMounted(async () => {
+  try {
+    isMaximized.value = await getCurrentWindow().isMaximized();
+    await getCurrentWindow().onResized(async () => {
+      isMaximized.value = await getCurrentWindow().isMaximized();
+    });
+  } catch (e) {
+    console.error('Failed to init window state:', e);
+  }
+});
 </script>
 
 <template>
@@ -591,14 +607,27 @@ const closeWindow = () => getCurrentWindow().close();
   <main class="main-content" style="position: relative;">
     <div data-tauri-drag-region style="position: absolute; top: 0; left: 0; right: 0; height: 64px; z-index: 10;"></div>
     <div class="window-controls" style="z-index: 10000;">
-      <button @click="minimizeWindow" class="win-btn" title="最小化">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      <button @click="minimizeWindow" class="win-btn" title="最小化" tabindex="-1">
+        <svg width="10" height="10" viewBox="0 0 10 10">
+          <line x1="0" y1="5" x2="10" y2="5" stroke="currentColor" stroke-width="1"></line>
+        </svg>
       </button>
-      <button @click="toggleMaximize" class="win-btn" title="最大化">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect></svg>
+      <button @click="toggleMaximize" class="win-btn" :title="isMaximized ? '向下还原' : '最大化'" tabindex="-1">
+        <!-- 还原图标 (两个重叠框) -->
+        <svg v-if="isMaximized" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
+          <path d="M2.5 7.5H0.5V0.5H7.5V2.5"></path>
+          <rect x="2.5" y="2.5" width="7" height="7"></rect>
+        </svg>
+        <!-- 最大化图标 (单个方框) -->
+        <svg v-else width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
+          <rect x="0.5" y="0.5" width="9" height="9"></rect>
+        </svg>
       </button>
-      <button @click="closeWindow" class="win-btn close-win-btn" title="关闭">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      <button @click="closeWindow" class="win-btn close-win-btn" title="关闭" tabindex="-1">
+        <svg width="10" height="10" viewBox="0 0 10 10">
+          <line x1="0.5" y1="0.5" x2="9.5" y2="9.5" stroke="currentColor" stroke-width="1"></line>
+          <line x1="9.5" y1="0.5" x2="0.5" y2="9.5" stroke="currentColor" stroke-width="1"></line>
+        </svg>
       </button>
     </div>
     <header class="header" :class="{ 'ai-chat-mode': activeCategory === 'ai-chat' }">

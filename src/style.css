@@ -250,36 +250,50 @@ body {
 
 .window-controls {
   position: fixed;
-  top: 12px;
-  right: 16px;
+  top: 0;
+  right: 0;
   display: flex;
-  align-items: center;
-  gap: 4px;
+  align-items: stretch;
+  gap: 0;
   z-index: 9999;
+  height: 32px;
+  -webkit-app-region: no-drag;
 }
 
 .win-btn {
   background: transparent;
   border: none;
-  width: 28px;
-  height: 28px;
-  display: flex;
+  width: 46px;
+  height: 32px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s;
+  cursor: default;
+  transition: background-color 0.12s ease, color 0.12s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  padding: 0;
 }
 
 .win-btn:hover {
-  background-color: var(--border-color);
+  background-color: color-mix(in srgb, var(--text-main) 9%, transparent);
   color: var(--text-main);
 }
 
+.win-btn:active {
+  background-color: color-mix(in srgb, var(--text-main) 16%, transparent);
+}
+
 .close-win-btn:hover {
-  background-color: var(--danger-color);
-  color: white;
+  background-color: #e81123 !important;
+  color: #ffffff !important;
+}
+
+.close-win-btn:active {
+  background-color: #bf0f1d !important;
+  color: #ffffff !important;
 }
 
 .search-box {
