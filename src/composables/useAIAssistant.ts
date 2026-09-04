@@ -225,7 +225,7 @@ export function useAIAssistant(todos: Ref<Todo[]>) {
   const stats = computed<TodayTaskStats>(() => {
     const todayTasks = todayComputed.value;
     const completedToday = todayTasks.filter((t) => t.completed);
-    const pendingToday = todayTasks.filter((t) => !t.completed && !t.gitUrl);
+    const pendingToday = todayTasks.filter((t) => !t.completed);
     const completionRate = todayTasks.length === 0 ? 0 : Math.round((completedToday.length / todayTasks.length) * 100);
     return { todayTasks, completedToday, pendingToday, completionRate };
   });
