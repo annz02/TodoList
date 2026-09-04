@@ -1,6 +1,6 @@
-# 📝 TodoList 智能待办与 AI Agent 助理
+# TodoList
 
-<p align="left">
+<p align="center">
   <a href="https://github.com/annz02/TodoList-Ann/releases"><img src="https://img.shields.io/github/v/release/annz02/TodoList-Ann?style=flat-square&color=3b82f6" alt="Release"></a>
   <a href="https://github.com/annz02/TodoList-Ann/releases"><img src="https://img.shields.io/github/downloads/annz02/TodoList-Ann/total?style=flat-square&color=10b981" alt="Downloads"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/annz02/TodoList-Ann?style=flat-square&color=8b5cf6" alt="License"></a>
@@ -8,171 +8,146 @@
   <a href="https://github.com/annz02/TodoList-Ann/stargazers"><img src="https://img.shields.io/github/stars/annz02/TodoList-Ann?style=flat-square&color=f59e0b" alt="Stars"></a>
 </p>
 
-一款基于 **Vue 3 + TypeScript + Vite + Tauri v2 (Rust)** 打造的现代化、高颜值桌面端待办事项管理与 **AI Agent 智能工作助理**。
+TodoList 是一款基于 Vue 3、TypeScript 与 Tauri v2 (Rust) 构建的高性能桌面待办事项管理与 AI Agent 智能工作助理。
 
-不仅拥有流畅美观的**清单列表**与**日历日程**双视图，更深度融合了**工具调用智能体（Tool-Augmented AI Agent）**，支持通过自然语言操控待办、联网事实检索、关联 Git 代码提交日志一键自动化生成结构化工作日报。
+项目专注于个人效能管理与开发者日常工作流的深度整合，提供清晰流畅的清单与日历双主视图，内置支持自主工具调用的任务型智能体（Task-Oriented AI Agent），并深度打通本地 Git 代码仓库，实现开发进度自动追踪与结构化工作日报一键生成。
 
----
+## 功能矩阵
 
-## ✨ 核心功能特性
+| 模块 | 核心能力 | 架构实现与边界 |
+|---|---|---|
+| 待办与日程管理 | 任务创建、编辑、状态流转、优先级标记与分类管理；开始/截止时间规划；月度日历视图（CalendarView）与清单视图无缝协同 | 前端响应式状态管理，本地持久化存储，毫秒级响应 |
+| AI Agent 工作台 | 自然语言操作待办（Tool Calling 增删改查）；多轮 ReAct 推理链；实时联网检索（Bocha / Tavily）与网页精读；可视化步骤追踪 | 基于 OpenAI 协议与 DeepSeek DSML 标签解析；内置 Rust 原生代理网络中继解决跨域与网络限制 |
+| Git 协同与日报生成 | 本地 Git 仓库关联与远程链接解析；当日 Commit 提交日志自动抓取与清洗；规则算法/大模型双模工作日报生成 | Rust 后端执行本地 git 指令提取与分析，前端聚合排版与一键复制 |
+| 桌面原生集成 | 系统原生桌面通知；全局快捷键加速；深浅色自适应主题；原生文件与目录选择器 | 基于 Tauri v2 原生插件生态与 Rust 系统级 API 调用 |
+| 自动升级与安全 | 应用内检测版本更新；跨版本变更日志聚合呈现；安装包完整性校验 | 基于 tauri-plugin-updater 与 Minisign 公钥签名验证体系 |
 
-### 📅 待办全流程管理与双视图
-- **灵活任务规划**：支持新建、编辑、删除、归档及快捷完成任务；支持设置优先级与分类标签。
-- **精确时间管理**：支持开始时间与截止时间精确规划，内置自研高颜值原生日期时间选择器（DateTimePicker）。
-- **双主视图无缝切换**：
-  - **清单列表视图**：按分类/状态清晰排列，支持快捷勾选与行内卡片展示。
-  - **月度日历视图（CalendarView）**：以日历格子直观呈现每日排期与截止任务，让日程一目了然。
-- **多维度检索与筛选**：提供今天、已完成、全部任务以及按工作、学习、生活等自定义分类标签的快速筛选。
+## 核心特性解析
 
----
+### 1. 待办日程与时间规划
+- **双主视图协同**：
+  - **清单列表视图**：清晰按状态和分类归集任务，支持行内快捷操作与快速勾选。
+  - **月度日历视图**：以月度日历网格直观映射任务排期与截止时间节点。
+- **精确时间规划**：内置原生级日期时间选择组件（DateTimePicker），支持快捷填充与时间区间约束。
+- **自定义分类与检索**：支持自定义标签分类及色彩标识，提供今日待办、全部、已完成等多维视图快速切换。
 
-### 🤖 AI Agent 智能助手工作台
-应用内置了独立的 **AI 助手视图**，不仅支持通用流式对话，更是具备环境交互闭环的 **Task-Oriented Agent（任务型智能体）**：
-
-- **自然语言待办操作（Tool Calling / Function Calling）**：
-  - 对话中说一句“*帮我安排今天下午3点开前端周会*”，Agent 自动提取参数并调用工具创建任务。
-  - 支持完整的工具生态：`create_task`（新建）、`update_task`（改名/改期/改分类）、`complete_task`（标记完成）、`delete_task`（删除）、`get_today_tasks`（查询今日进度）。
+### 2. 任务型 AI Agent 智能体
+- **自然语言工具调用（Tool Calling / Function Calling）**：
+  - 支持通过自然对话完成复杂的待办管理，内置 `create_task`、`update_task`、`complete_task`、`delete_task`、`get_today_tasks` 等核心工具。
 - **自主多轮推理循环（ReAct Agent Loop）**：
-  - 支持最多 4 轮链式工具调用（例如：“*查一下今天北京的天气，并帮我新建一个带伞任务*”：Agent 先执行联网搜索观察结果，再在下一轮自主执行任务创建，形成闭环）。
-- **可视化思维与步骤链（AgentStep）**：
-  - 工具调用的执行过程完全透明，界面实时呈现各步骤的状态（运行中、已完成、错误提示）。
+  - 支持多轮链式工具调用与决策闭环（如先联网查询信息，再根据结果自主调度工具创建任务）。
 - **联网检索与网页精读**：
-  - 集成 **Bocha (博查)** 与 **Tavily** 搜索引擎，支持 `web_search` 实时检索最新资讯。
-  - 支持 `fetch_webpage` 对目标网页进行正文深度提取与精读理解。
-- **多协议深度兼容**：
-  - 原生支持 OpenAI 标准 Function Calling，同时深度兼容 DeepSeek 的 `DSML` 工具标签协议。
-- **多会话与历史管理**：
-  - 支持创建多个独立会话，按“今天”、“昨天”、“7天内”、“更早”智能归档分组，支持会话重命名与持久化存储。
-- **Rust 原生网络代理中继**：
-  - 针对客户端大模型接口请求可能出现的跨域（CORS）与网络限制，内置 Rust 原生代理转发降级机制，确保请求极速稳定。
+  - 集成 Bocha 与 Tavily 搜索引擎接口，支持 `web_search` 实时检索与 `fetch_webpage` 网页正文深度提取。
+- **多协议与流式输出**：
+  - 原生支持 OpenAI 工具调用标准，同时兼容 DeepSeek DSML 工具标签协议。
+- **Rust 原生网络中继**：
+  - 针对客户端大模型接口的跨域（CORS）与网络访问限制，内置 Rust 原生 HTTP 代理转发降级机制，确保连接稳定。
 
----
+### 3. Git 协同与智能工作日报
+- **代码仓库深度关联**：
+  - 支持绑定本地 Git 代码目录（通过系统原生目录选择器自动获取）或 GitHub / GitLab / Gitea 等远程仓库链接。
+- **提交记录自动聚合**：
+  - 一键检索分析指定仓库当天的 Git Commit 日志，自动清洗 Merge 杂质与 Hash 标识，按任务维度归集。
+- **双模工作日报生成**：
+  - **离线规则生成**：无需配置大模型 API Key，依托内置算法秒级输出标准三段式工作日报。
+  - **大模型专业润色**：结合任务进度与 Git 提交，由 AI 自动扩写提炼为结构严谨、重点突出的专业周报/日报。
 
-### 📊 Git 提交关联与智能工作日报
-针对开发者与职场人士的日常工作汇报痛点，深度打通代码仓库与待办任务：
-
-- **Git 代码关联**：
-  - 待办任务中可直接配置**本地 Git 仓库路径**（自动唤起原生系统目录选择）或 **GitHub / GitLab / Gitea** 远程网页链接。
-- **自动抓取 Commit 提交记录**：
-  - 一键读取当天代码提交日志，智能清洗无用前缀与 Hash 杂质，与对应任务绑定聚合。
-- **双模日报生成**：
-  - **本地离线秒级生成**：无大模型 API Key 状态下，依托内置规则算法秒级生成标准三段式日报。
-  - **在线大模型专业提炼**：结合任务进度与 Git 提交，由大模型自动扩写润色为条理清晰的专业日报。
-- **一键快捷复制**：
-  - 支持一键提取今日已完成的成果与提交列表，方便秒级同步至钉钉、企业微信、飞书等工作群。
-
----
-
-### 🎨 桌面级原生体验与系统整合
-- **深浅主题自适应**：原生适配 Dark / Light 模式，并提供多套个性化主题色彩选择。
-- **桌面级系统通知**：基于 Tauri v2 原生通知插件，待办任务到期自动推送桌面提醒。
-- **全键盘快捷键提效**：
-  - `Ctrl + N`：新建待办任务
-  - `Ctrl + S`：保存任务
-  - `Ctrl + E`：编辑当前任务
-  - `Ctrl + D`：删除任务
-  - `Ctrl + W`：关闭应用窗口
-- **原生文件交互**：集成 rfd 原生文件/目录选择器与安全的外部默认浏览器链接唤醒。
-
----
-
-### 🔄 自动化更新与安全防护
-- **应用内一键检查更新**：基于 `tauri-plugin-updater` 实现无缝检测与热升级，无需反复访问网页重新下载。
-- **Minisign 公钥验签**：更新包通过公钥签名严格校验完整性，杜绝劫持与篡改风险。
-- **跨版本 ChangeLog 聚合**：升级时自动拉取并汇总所有跨版本更新日志，新特性一目了然。
-
----
-
-## 🛠 技术栈与架构设计
+## 架构设计与技术栈
 
 ```
-TodoList-Desktop
-├── 前端表现层 (Vue 3 + TypeScript + Vite)
-│   ├── 核心视图 (List / Calendar / AIChatView)
-│   ├── Agent 调度与流式处理 (useChatStream / useConversations / useAIAssistant)
-│   └── 联网与格式化工具 (useWebSearch / markdown / categoryColor)
-└── 桌面原生层 (Tauri v2 + Rust 2021)
-    ├── 核心存储 (本地 JSON 数据持久化)
-    ├── Git 集成 (本地 git log 检索与分支分析)
-    ├── 网络中继 (Rust reqwest 原生安全代理与网页提取)
-    └── 桌面服务 (系统通知 / Minisign 热更新 / 原生文件对话框)
+TodoList
+├── Frontend (Vue 3 + TypeScript + Vite)
+│   ├── Views & Components (List / Calendar / AIChatView / DateTimePicker)
+│   ├── Agent & Stream Core (useChatStream / useConversations / useAIAssistant)
+│   └── Utils & Tools (useWebSearch / markdown / gitParser)
+└── Backend Desktop Shell (Tauri v2 + Rust)
+    ├── Data Storage (Local JSON persistence)
+    ├── Git Subsystem (Local repository log analysis)
+    ├── Network Bridge (Reqwest native proxy & webpage extractor)
+    └── System Integration (Notification / Minisign updater / Dialog)
 ```
 
-| 架构层 | 技术选型 | 说明 |
-| :--- | :--- | :--- |
-| **桌面框架** | **Tauri v2** | 基于 Rust 的超轻量、安全、低内存占用的下一代跨平台桌面引擎 |
-| **前端框架** | **Vue 3.5+** | Composition API + `<script setup>` 高响应性组件模型 |
-| **编程语言** | **TypeScript 6 + Rust 2021** | 双端严格强类型系统，代码健壮性强 |
-| **构建工具** | **Vite 8** | 极速冷启动与 HMR 模块热重载 |
-| **AI & Agent** | **ReAct Loop + Tool Calls** | 支持 OpenAI 协议、DeepSeek DSML 标签解析、Bocha / Tavily 搜索引擎 |
-| **富文本与排版** | **Marked 18** | 高性能 Markdown 流式渲染，支持代码高亮与敏感标签过滤 |
-| **自动更新** | **tauri-plugin-updater** | 结合 minisign 签名与 GitHub Releases 自动发布流水线 |
-| **系统通知** | **tauri-plugin-notification** | 跨平台桌面原生推送通知 |
+| 层次 | 技术选型 | 说明 |
+|---|---|---|
+| **桌面运行时** | Tauri v2 | 基于 Rust 构建的高性能、轻量级、低内存占用跨平台桌面框架 |
+| **前端框架** | Vue 3.5+ | Composition API 与 `<script setup>` 响应式开发模式 |
+| **开发语言** | TypeScript + Rust | 全链路强类型约束，确保运行时安全与稳定性 |
+| **构建工具** | Vite 8 | 毫秒级冷启动与 HMR 热更新 |
+| **AI 调度引擎** | ReAct Loop + Tool Calls | 支持 OpenAI 协议、DeepSeek DSML 标签解析、Bocha / Tavily 搜索引擎 |
+| **文档渲染** | Marked | 流式 Markdown 渲染与代码高亮 |
+| **热更新机制** | tauri-plugin-updater | 结合 Minisign 公钥签名与 GitHub Releases 自动发布流水线 |
 
----
+## 安装指南
 
-## 🚀 快速开始
+### Windows
 
-### 1. 环境准备
-本地开发需安装以下基础环境：
-- [Node.js](https://nodejs.org/) (建议 v18 及以上版本)
-- [pnpm](https://pnpm.io/) (推荐的包管理工具)
-- [Rust](https://www.rust-lang.org/) 环境 (安装 `rustup` 与最新稳定版工具链，用于 Tauri 桌面编译)
+前往 [Releases](https://github.com/annz02/TodoList-Ann/releases) 页面下载适合的安装包：
 
-### 2. 克隆项目与安装依赖
+- **安装引导包**：下载 `TodoList_*_x64-setup.exe`，按向导指引完成安装，自动创建桌面与开始菜单快捷方式。
+- **MSI 安装包**：下载 `TodoList_*_x64_en-US.msi`，适用于静默部署与集中管理。
+
+> **Windows SmartScreen 提示**：由于未购买商业代码签名证书，初次安装若提示“已保护你的电脑”，点击「更多信息」并选择「仍要运行」即可。
+
+### macOS
+
+前往 [Releases](https://github.com/annz02/TodoList-Ann/releases) 页面下载适合当前架构的 `.dmg` 镜像：
+
+- **Apple Silicon (M系列芯片)**：下载 `TodoList_*_aarch64.dmg`。
+- **Intel 芯片**：下载 `TodoList_*_x64.dmg`。
+
+打开镜像并将 `TodoList.app` 拖入 `Applications` 应用程序文件夹。
+
+> **macOS 安全提示**：如遇到“无法打开，因为无法验证开发者”，请前往「系统设置 -> 隐私与安全性」，在安全性板块点击「仍要打开」；或在终端执行解除隔离属性命令：
+> ```bash
+> sudo xattr -dr com.apple.quarantine /Applications/TodoList.app
+> ```
+
+## 本地开发
+
+### 环境要求
+- [Node.js](https://nodejs.org/) (>= 18.0.0)
+- [pnpm](https://pnpm.io/) (推荐的包管理器)
+- [Rust](https://www.rust-lang.org/) (最新稳定版工具链，用于 Tauri 桌面端编译)
+
+### 安装与运行
+
 ```bash
+# 克隆仓库
 git clone https://github.com/annz02/TodoList-Ann.git
 cd TodoList-Ann
-pnpm install
-```
 
-### 3. 开发环境运行
-```bash
-# 仅启动 Web 前端界面调试
+# 安装前端依赖
+pnpm install
+
+# 启动 Web 前端开发模式
 pnpm dev
 
-# 启动完整的 Tauri 桌面端应用（支持所有原生 API）
+# 启动完整 Tauri 桌面端开发环境（支持原生接口）
 pnpm tauri dev
 ```
 
-### 4. 构建与发布打包
+### 构建与打包
+
 ```bash
-# 前端静态资源编译与类型检查
+# 前端静态资源构建与类型检查
 pnpm build
 
-# 打包全平台桌面安装包（输出到 src-tauri/target/release/bundle/）
+# 构建全平台桌面分发包
 pnpm tauri build
 ```
 
----
+## 贡献规范
 
-## 📦 下载安装
+本项目采用 **Conventional Commits** 提交规范：
 
-你可以前往 [GitHub Releases](https://github.com/annz02/TodoList-Ann/releases) 页面下载适合你系统的最新安装包：
-
-- **Windows**: 下载 `_x64-setup.exe` 安装引导包或 `_x64_en-US.msi`。
-- **macOS (Intel 芯片)**: 下载文件名含 `x64` 的 `.dmg` 镜像。
-- **macOS (Apple Silicon M系列)**: 下载文件名含 `aarch64` 的 `.dmg` 镜像。
-
-> [!TIP]
-> - **macOS 提示“无法验证开发者”**：由于未加入 Apple 付费公证体系，初次安装请前往「系统设置 > 隐私与安全性」中点击「仍要打开」即可。
-> - **Windows 出现 SmartScreen 提示**：点击「更多信息」并选择「仍要运行」即可正常安装使用。
-
----
-
-## 🤝 贡献与提交规范
-
-欢迎提交 Issue 或 Pull Request 协助改进项目！
-
-本项目严格遵循 **Angular / Conventional Commits** 提交规范：
 ```
 <type>(<scope>): <subject>
 ```
-- **type**: `feat`（新功能）、`fix`（修补bug）、`docs`（文档）、`style`（格式）、`refactor`（重构）、`perf`（性能优化）、`test`（测试）、`chore`（构建/工具日常维护）。
-- **subject**: 简明扼要的英文或中文说明，祈使句式，不加末尾句号。
 
----
+- **type**：`feat`（新特性）、`fix`（缺陷修复）、`docs`（文档更新）、`style`（代码格式）、`refactor`（重构）、`perf`（性能优化）、`test`（测试）、`build` / `chore`（构建与工具链）。
+- **scope**（可选）：变更涉及的模块，如 `ai-chat`、`calendar`、`todos`、`git` 等。
+- **subject**：简明清晰的动词开头的语句，结尾不加句号。
 
-## 📄 开源协议
+## 开源协议
 
 本项目基于 [MIT License](LICENSE) 协议开源。
