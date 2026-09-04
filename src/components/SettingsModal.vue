@@ -702,6 +702,14 @@ const handleManualCheck = async () => {
   color: var(--primary-color);
 }
 
+:global(.dark) .nav-header {
+  color: #ffffff;
+}
+
+:global(.dark) .nav-item:not(.active) {
+  color: #ffffff;
+}
+
 :global(.dark) .nav-item:hover:not(.active) {
   background: color-mix(in srgb, var(--primary-color) 12%, transparent);
   color: var(--primary-color);

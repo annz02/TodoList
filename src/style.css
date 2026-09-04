@@ -478,6 +478,13 @@ body {
   background-color: var(--primary-light);
 }
 
+.dark .sidebar,
+.dark .sidebar .logo-area,
+.dark .sidebar .menu-item:not(.active),
+.dark .sidebar .menu-item:not(.active) .badge {
+  color: #ffffff;
+}
+
 .dark .menu-item:hover:not(.active) {
   background-color: color-mix(in srgb, var(--primary-color) 12%, transparent);
   color: var(--primary-color);
