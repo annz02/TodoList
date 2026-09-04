@@ -9,7 +9,6 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:activeCategory', val: string): void;
-  (e: 'add-task-clicked'): void;
   (e: 'open-settings'): void;
 }>();
 </script>
@@ -21,10 +20,6 @@ const emit = defineEmits<{
         <img src="/logo.png" alt="Logo" style="width: 32px; height: 32px; margin-right: 12px; border-radius: 6px; object-fit: contain;" />
         <span style="font-size: 1.25rem;">Todolist</span>
       </div>
-      <svg class="plus-btn" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" @click="emit('add-task-clicked')">
-        <line x1="12" y1="5" x2="12" y2="19"></line>
-        <line x1="5" y1="12" x2="19" y2="12"></line>
-      </svg>
     </div>
 
     <div class="menu">

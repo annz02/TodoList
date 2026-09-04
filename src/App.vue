@@ -582,7 +582,6 @@ const handleUpdateTaskFromAI = (data: {
         :todayCount="todayCount"
         :completedCount="completedCount"
         :allCount="allCount"
-        @add-task-clicked="() => handleAddTaskClick()"
         @open-settings="handleOpenSettings('general')"
       />
 
