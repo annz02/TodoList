@@ -1,56 +1,71 @@
-export interface CategoryStyle {
+export interface PaperTheme {
+  id: string;
+  name: string;
   bg: string;
-  text: string;
-  border: string;
-  darkBg: string;
-  darkText: string;
-  darkBorder: string;
+  chip: string;
 }
 
-const COLOR_LIST: CategoryStyle[] = [
-  // 0: 蓝 (工作)
-  { bg: '#dbeafe', text: '#1d4ed8', border: '#93c5fd', darkBg: 'rgba(59, 130, 246, 0.25)', darkText: '#93c5fd', darkBorder: 'rgba(147, 197, 253, 0.4)' },
-  // 1: 绿 (开发)
-  { bg: '#dcfce7', text: '#15803d', border: '#86efac', darkBg: 'rgba(34, 197, 94, 0.25)', darkText: '#86efac', darkBorder: 'rgba(134, 239, 172, 0.4)' },
-  // 2: 橙 (学习)
-  { bg: '#ffedd5', text: '#c2410c', border: '#fdba74', darkBg: 'rgba(249, 115, 22, 0.25)', darkText: '#fdba74', darkBorder: 'rgba(253, 186, 116, 0.4)' },
-  // 3: 粉 (生活)
-  { bg: '#fce7f3', text: '#be185d', border: '#f9a8d4', darkBg: 'rgba(236, 72, 153, 0.25)', darkText: '#f9a8d4', darkBorder: 'rgba(249, 168, 212, 0.4)' },
-  // 4: 紫 (设计)
-  { bg: '#f3e8ff', text: '#6b21a8', border: '#d8b4fe', darkBg: 'rgba(168, 85, 247, 0.25)', darkText: '#d8b4fe', darkBorder: 'rgba(216, 180, 254, 0.4)' },
-  // 5: 红 (紧急)
-  { bg: '#fee2e2', text: '#b91c1c', border: '#fca5a5', darkBg: 'rgba(239, 68, 68, 0.25)', darkText: '#fca5a5', darkBorder: 'rgba(252, 165, 165, 0.4)' },
-  // 6: 青 (其它)
-  { bg: '#ccfbf1', text: '#0f766e', border: '#99f6e4', darkBg: 'rgba(20, 184, 166, 0.25)', darkText: '#99f6e4', darkBorder: 'rgba(153, 246, 228, 0.4)' },
-  // 7: 灰 (未分类)
-  { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1', darkBg: 'rgba(100, 116, 139, 0.25)', darkText: '#cbd5e1', darkBorder: 'rgba(203, 213, 225, 0.4)' },
+export const NOTY_PALETTE: PaperTheme[] = [
+  {
+    id: 'green',
+    name: '薄荷绿',
+    bg: '#9FE3C5',
+    chip: '#10B981',
+  },
+  {
+    id: 'pink',
+    name: '玫瑰粉',
+    bg: '#F9B7CA',
+    chip: '#EC4899',
+  },
+  {
+    id: 'sand',
+    name: '沙色金',
+    bg: '#E7D4AA',
+    chip: '#B45309',
+  },
+  {
+    id: 'blue',
+    name: '经典蓝',
+    bg: '#B8DCFB',
+    chip: '#3B82F6',
+  },
+  {
+    id: 'amber',
+    name: '蜜桃橙',
+    bg: '#FBC396',
+    chip: '#F59E0B',
+  },
 ];
 
-const PRESET_INDEXES: Record<string, number> = {
-  '工作': 0,
-  '开发': 1,
-  '学习': 2,
-  '生活': 3,
-  '设计': 4,
-  '紧急': 5,
-  '未分类': 7,
-};
+export function getPaperTheme(colorOrCategory?: string): PaperTheme {
+  if (!colorOrCategory) return NOTY_PALETTE[1]; // Default Pink (#FBCFE8)
+  const query = colorOrCategory.trim().toLowerCase();
 
-const dynamicCategoryMap = new Map<string, number>();
-let nextColorIndex = 0;
+  const byId = NOTY_PALETTE.find((p) => p.id === query);
+  if (byId) return byId;
 
-export function getCategoryStyle(name?: string): CategoryStyle {
-  if (!name || !name.trim()) return COLOR_LIST[7];
-  const trimmed = name.trim();
+  if (query.includes('绿') || query.includes('green') || query.includes('开发') || query === '#10b981') return NOTY_PALETTE[0];
+  if (query.includes('粉') || query.includes('pink') || query.includes('生活') || query === '#ec4899') return NOTY_PALETTE[1];
+  if (query.includes('沙') || query.includes('sand') || query.includes('金') || query === '#e7dbb8') return NOTY_PALETTE[2];
+  if (query.includes('蓝') || query.includes('blue') || query.includes('工作') || query === '#3b82f6') return NOTY_PALETTE[3];
+  if (query.includes('橙') || query.includes('黄') || query.includes('amber') || query.includes('学习') || query.includes('紧急') || query === '#f59e0b') return NOTY_PALETTE[4];
 
-  if (PRESET_INDEXES[trimmed] !== undefined) {
-    return COLOR_LIST[PRESET_INDEXES[trimmed]];
+  let hash = 0;
+  for (let i = 0; i < query.length; i++) {
+    hash = (hash << 5) - hash + query.charCodeAt(i);
   }
+  return NOTY_PALETTE[Math.abs(hash) % NOTY_PALETTE.length];
+}
 
-  if (!dynamicCategoryMap.has(trimmed)) {
-    dynamicCategoryMap.set(trimmed, nextColorIndex % 7);
-    nextColorIndex++;
-  }
-
-  return COLOR_LIST[dynamicCategoryMap.get(trimmed)!];
+export function getCategoryStyle(name?: string) {
+  const theme = getPaperTheme(name);
+  return {
+    bg: theme.bg,
+    text: '#1E293B',
+    border: 'rgba(0,0,0,0.1)',
+    darkBg: theme.bg,
+    darkText: '#1E293B',
+    darkBorder: 'rgba(0,0,0,0.1)',
+  };
 }

@@ -1,0 +1,494 @@
+/* 站酷快乐体 ZCOOL KuaiLe — 圆润俏皮手写（免费可商用）
+   来源: https://github.com/googlefonts/zcool-kuaile 本仓同步字体字库
+   OFL/ZCOOL 开源授权,可用于商用。 */
+@font-face {
+  font-family: "ZCOOL KuaiLe";
+  src: url("./fonts/ZCOOLKuaiLe-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --desk-paper: #EFEBE3;
+  --desk-dark: #191713;
+  --ink: #221F1A;
+  --ink-secondary: #5F584C;
+  --ink-muted: #8C8375;
+  --paper-shadow: 0 3px 10px rgba(60, 48, 30, 0.14);
+  --paper-shadow-lift: 0 8px 18px rgba(60, 48, 30, 0.2);
+  /* Width reserved for the always-on right guide + distance from window edge */
+  --dock-col-gap: 12px;
+}
+
+.dark {
+  --desk-paper: #191713;
+  --ink: #F1ECE2;
+  --ink-secondary: #B4AB9B;
+  --ink-muted: #8A8172;
+  --paper-shadow: 0 3px 10px rgba(0, 0, 0, 0.55);
+  --paper-shadow-lift: 0 8px 18px rgba(0, 0, 0, 0.7);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: transparent !important;
+  overflow: hidden;
+  font-family: "ZCOOL KuaiLe", "Segoe UI", Roboto, "Microsoft YaHei",
+    "PingFang SC", "Hiragino Sans GB", "WenQuanYi Micro Hei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The browser UA resets the font on form controls (<button>, <input>, <textarea>),
+   so without this they would NOT inherit the bundled cheese font from `#app`. */
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+body {
+  user-select: none;
+  -webkit-user-select: none;
+  color: var(--ink);
+}
+
+/* =========================================================================
+   Shell: the dock fills the transparent OS window; the color column is
+   pinned to the far-right edge and the note sheet (if opened) grows left.
+   ========================================================================= */
+.dock {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+
+/* ---- Always-on bookmark tab column (each note = one vertical tab) ---------- */
+.dock-col {
+  order: 2;
+  flex-shrink: 0;
+  width: 46px;
+  min-width: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 8px 0;
+  gap: 0;
+}
+
+.dock-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.dock-tab {
+  appearance: none;
+  position: relative;
+  width: 32px;
+  min-width: 32px;
+  height: 94px;
+  min-height: 94px;
+  max-height: 94px;
+  border-radius: 13px 0 0 13px;
+  border: none;
+  outline: none;
+  padding: 8px 3px;
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: -2px 2px 6px rgba(0, 0, 0, 0.13);
+  flex-shrink: 0;
+  transform-origin: right top;
+  transform: rotate(-4deg);
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease, filter 0.16s ease;
+  overflow: hidden;
+}
+
+/* Consecutive tabs overlap: lower tab overlaps on top of upper tab */
+.dock-tab + .dock-tab {
+  margin-top: -8px;
+}
+
+.dock-tab:nth-child(1) { z-index: 1; }
+.dock-tab:nth-child(2) { z-index: 2; }
+.dock-tab:nth-child(3) { z-index: 3; }
+.dock-tab:nth-child(4) { z-index: 4; }
+.dock-tab:nth-child(5) { z-index: 5; }
+.dock-tab:nth-child(6) { z-index: 6; }
+
+.dock-tab:hover {
+  z-index: 20 !important;
+  box-shadow: -3px 3px 12px rgba(0, 0, 0, 0.24);
+  filter: brightness(1.06);
+}
+
+.dock-tab.active {
+  z-index: 25 !important;
+  box-shadow: -4px 3px 14px rgba(0, 0, 0, 0.28);
+  filter: brightness(1.08);
+}
+
+.dock-tab.done {
+  filter: grayscale(0.35);
+  opacity: 0.6;
+}
+
+.dock-tab.done .dock-tab-title {
+  text-decoration: line-through;
+}
+
+.dock-tab-title {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  text-transform: uppercase;
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+  line-height: 1.1;
+  color: #352520;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 76px;
+}
+
+/* ---- Overflow '+N' pill -------------------------------------------------- */
+.dock-overflow-badge {
+  appearance: none;
+  width: 34px;
+  min-width: 34px;
+  height: 26px;
+  min-height: 26px;
+  border-radius: 8px 0 0 8px;
+  background-color: #744535;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: -2px 1px 4px rgba(0, 0, 0, 0.18);
+  flex-shrink: 0;
+  margin-top: 3px;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+  z-index: 6;
+}
+
+.dock-overflow-badge:hover {
+  transform: translateX(-3px);
+  background-color: #5c3528;
+}
+
+/* ---- Solid Circle-'+' new note button ------------------------------------ */
+.dock-new-btn {
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  margin: 6px 4px 2px auto;
+  border-radius: 50%;
+  border: none;
+  background-color: #744535;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+  transition: opacity 0.15s ease, transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  z-index: 6;
+}
+
+.dock-new-btn:hover {
+  background-color: #5c3528;
+  transform: scale(1.12);
+  box-shadow: 0 3px 9px rgba(0, 0, 0, 0.3);
+}
+
+/* =========================================================================
+   Note sheet (open / create only): Sits to the left of the dock tab column.
+   ========================================================================= */
+.noty-sheet {
+  position: absolute;
+  right: 46px;
+  top: var(--card-top, 8px);
+  width: 380px;
+  height: 250px;
+  max-height: 250px;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  padding: 0 8px 0 0;
+  margin: 0;
+  z-index: 5;
+  overflow: visible;
+  transition: top 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.noty-paper-card {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  border: 1px solid rgba(60, 48, 30, 0.12);
+  box-shadow: -4px 6px 22px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+  transition: background-color 0.24s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.24s ease;
+}
+
+.dark .noty-paper-card {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: -4px 6px 22px rgba(0, 0, 0, 0.45);
+}
+
+/* Slide-out & unfold transition for noty-sheet */
+.noty-fade-slide-enter-active {
+  transition: opacity 0.26s cubic-bezier(0.16, 1, 0.3, 1), transform 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.noty-fade-slide-leave-active {
+  transition: opacity 0.16s ease-in, transform 0.16s ease-in;
+}
+.noty-fade-slide-enter-from {
+  opacity: 0;
+  transform: translateX(36px) scale(0.97);
+}
+.noty-fade-slide-leave-to {
+  opacity: 0;
+  transform: translateX(24px) scale(0.97);
+}
+
+.noty-main-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 12px 16px 10px 16px;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.noty-fade-slide-enter-from .noty-main-area {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+/* Header */
+.noty-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  gap: 10px;
+}
+
+.noty-header-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.noty-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.noty-saved-status {
+  font-size: 11px;
+  opacity: 0.72;
+  font-weight: 500;
+}
+
+.noty-icon-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.75;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.noty-icon-btn:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+/* Content */
+.noty-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.noty-title-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 16.5px;
+  font-weight: 700;
+  color: inherit;
+  font-family: inherit;
+  letter-spacing: 0;
+  padding: 0;
+  line-height: 1.35;
+}
+
+.noty-title-input::placeholder {
+  color: inherit;
+  opacity: 0.45;
+}
+
+.noty-body-textarea {
+  width: 100%;
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13.5px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0.1px;
+  color: inherit;
+  font-family: inherit;
+  padding: 0;
+  resize: none;
+  min-height: 70px;
+}
+
+.noty-body-textarea::placeholder {
+  color: inherit;
+  opacity: 0.45;
+}
+
+/* Bottom toolbar */
+.noty-bottom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1.5px dashed rgba(60, 48, 30, 0.14);
+}
+
+.dark .noty-bottom-bar {
+  border-top-color: rgba(255, 255, 255, 0.14);
+}
+
+.noty-color-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-dot {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.color-dot:hover {
+  transform: scale(1.15);
+}
+
+.color-dot.active {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+}
+
+.noty-action-pills {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.pill-btn {
+  appearance: none;
+  border: none;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  color: inherit;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.pill-btn:hover {
+  background: rgba(0, 0, 0, 0.16);
+  transform: translateY(-1px);
+}
+
+.pill-delete:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #991b1b;
+}
+
+.dark .pill-delete:hover {
+  color: #fca5a5;
+}
+
+.pill-save {
+  background: var(--ink);
+  color: #ffffff;
+}
+
+.pill-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dark .pill-save {
+  background: #ffffff;
+  color: #191713;
+}

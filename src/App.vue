@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen, emit } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { Todo } from './types';
 import { useTheme } from './composables/useTheme';
+import { toYYYYMMDD, isTodayTask } from './utils/date';
+import { EVENTS, type JumpToTaskPayload, type TodosChangedPayload } from './events';
 import TitleBar from './components/TitleBar.vue';
 import Sidebar from './components/Sidebar.vue';
 import SettingsModal from './components/SettingsModal.vue';
@@ -21,6 +24,8 @@ const { currentVersion, autoCheckUpdate, checkUpdate, pendingUpdate, installUpda
 const showStartupUpdateModal = ref(false);
 const showChangelogModal = ref(false);
 let unlistenUpdate: (() => void) | null = null;
+let unlistenTodos: (() => void) | null = null;
+let unlistenJump: (() => void) | null = null;
 
 const todos = ref<Todo[]>([]);
 const nowRef = ref(new Date());
@@ -63,10 +68,56 @@ const loadTodos = async () => {
 const saveTodos = async () => {
   try {
     await invoke('save_todos', { data: JSON.stringify(todos.value) });
+    // Notify any open sticky-note windows to refresh from the shared file.
+    const payload: TodosChangedPayload = { source: 'main' };
+    emit(EVENTS.todosChanged, payload).catch(() => {});
   } catch (e) {
     console.error('Failed to save todos:', e);
   }
 };
+
+// Reload from the shared todos.json when ANOTHER window changed it (or when we
+// are (re)shown so stale copies are picked up). Avoid self-triggered reloads.
+const handleTodosChanged = (payload: TodosChangedPayload | null) => {
+  if (payload && payload.source === 'main') return;
+  loadTodos();
+};
+
+// Bring this window to the front (it may be minimized / behind other apps).
+const bringToFront = async () => {
+  try {
+    const win = getCurrentWindow();
+    await win.show();
+    await win.unminimize();
+    await win.setFocus();
+  } catch (e) {
+    console.warn('Failed to bring window to front:', e);
+  }
+};
+
+const handleJumpToTask = async (payload: JumpToTaskPayload) => {
+  const taskId = payload?.taskId;
+  if (!taskId) return;
+  const task = todos.value.find(t => t.id === taskId);
+  if (!task) return;
+
+  // Switch to the today list (where sticky tasks live) and select the target.
+  activeCategory.value = 'today';
+  searchQuery.value = '';
+  selectedTaskId.value = taskId;
+
+  await nextTick();
+  const el = document.querySelector<HTMLElement>(`[data-task-id="${taskId}"]`);
+  if (el) {
+    try {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (e) {
+      el.scrollIntoView();
+    }
+  }
+  await bringToFront();
+};
+
 
 onMounted(async () => {
   loadTodos();
@@ -92,6 +143,24 @@ onMounted(async () => {
     });
   } catch (e) {
     console.warn('Failed to setup update listener:', e);
+  }
+
+  // Listen for data / jump requests coming from the desktop sticky-note window.
+  try {
+    unlistenTodos = await listen<TodosChangedPayload>(
+      EVENTS.todosChanged,
+      ev => handleTodosChanged(ev?.payload ?? null)
+    );
+  } catch (e) {
+    console.warn('Failed to listen todos-changed:', e);
+  }
+  try {
+    unlistenJump = await listen<JumpToTaskPayload>(
+      EVENTS.jumpToTask,
+      ev => handleJumpToTask(ev?.payload as JumpToTaskPayload)
+    );
+  } catch (e) {
+    console.warn('Failed to listen jump-to-task:', e);
   }
 
   window.addEventListener('focus', syncCurrentTime);
@@ -143,6 +212,8 @@ onMounted(() => {
 onUnmounted(() => {
   if (checkInterval) clearInterval(checkInterval);
   if (unlistenUpdate) unlistenUpdate();
+  if (unlistenTodos) unlistenTodos();
+  if (unlistenJump) unlistenJump();
   window.removeEventListener('focus', syncCurrentTime);
   document.removeEventListener('visibilitychange', syncCurrentTime);
   window.removeEventListener('keydown', handleGlobalKeydown);
@@ -196,59 +267,10 @@ const updateTimeTexts = () => {
   }
 };
 
-const getYYYYMMDD = (dateInput?: string | Date) => {
-  if (!dateInput) return '';
-  const d = new Date(dateInput);
-  if (isNaN(d.getTime())) return '';
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-};
-
-const isTodayTask = (t: Todo) => {
-  const todayStr = getYYYYMMDD(nowRef.value);
-  const startDateStr = getYYYYMMDD(t.startTime);
-  const dueDateStr = getYYYYMMDD(t.dueDate);
-
-  if (startDateStr && dueDateStr && startDateStr <= dueDateStr) {
-    if (todayStr >= startDateStr && todayStr <= dueDateStr) {
-      return true;
-    }
-    if (todayStr > dueDateStr) {
-      return !t.completed;
-    }
-    return false;
-  }
-
-  const primaryDateStr = startDateStr || dueDateStr;
-
-  if (primaryDateStr) {
-    if (primaryDateStr === todayStr) {
-      return true;
-    }
-    if (primaryDateStr > todayStr) {
-      return false;
-    }
-    if (primaryDateStr < todayStr) {
-      return !t.completed;
-    }
-  }
-
-  if (t.completed) {
-    const completedDateStr = getYYYYMMDD(t.completedAt);
-    if (completedDateStr) {
-      return completedDateStr === todayStr;
-    }
-  }
-
-  return true;
-};
-
 const toggleComplete = (task: Todo) => {
   task.completed = !task.completed;
   if (task.completed) {
-    task.completedAt = getYYYYMMDD(nowRef.value);
+    task.completedAt = toYYYYMMDD(nowRef.value);
   } else {
     delete task.completedAt;
   }
@@ -289,7 +311,7 @@ const filteredTodos = computed(() => {
   }
   
   if (activeCategory.value === 'today') {
-    result = result.filter(t => isTodayTask(t));
+    result = result.filter(t => isTodayTask(t, nowRef.value));
   } else if (activeCategory.value === 'completed') {
     result = result.filter(t => t.completed);
   }
@@ -327,7 +349,7 @@ const groupedTodos = computed(() => {
   return result;
 });
 
-const todayCount = computed(() => todos.value.filter(t => isTodayTask(t)).length);
+const todayCount = computed(() => todos.value.filter(t => isTodayTask(t, nowRef.value)).length);
 const completedCount = computed(() => todos.value.filter(t => t.completed).length);
 const allCount = computed(() => todos.value.length);
 
@@ -706,6 +728,7 @@ const handleUpdateTaskFromAI = (data: {
             <TaskItem 
               v-for="task in group.tasks" 
               :key="task.id" 
+              :data-task-id="task.id"
               :task="task" 
               :isSelected="task.id === selectedTaskId"
               @select="selectedTaskId = $event"

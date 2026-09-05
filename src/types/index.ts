@@ -9,4 +9,6 @@ export interface Todo {
   priority?: number;
   completedAt?: string;
   gitUrl?: string;
+  description?: string;
+  color?: string;
 }

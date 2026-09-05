@@ -1,5 +1,7 @@
 use std::sync::Arc;
 use tauri::Manager;
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
 mod update;
 use update::UpdateState;
@@ -37,6 +39,62 @@ fn save_settings(app: tauri::AppHandle, data: String) -> Result<(), String> {
 fn load_settings(app: tauri::AppHandle) -> Result<String, String> {
     let path = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("settings.json");
     std::fs::read_to_string(path).or_else(|_| Ok("{}".to_string()))
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DockAnchor {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    scale_factor: f64,
+}
+
+/// Work-area rect (taskbar excluded) of the monitor the sticky window is on,
+/// in physical pixels, plus the scale factor needed to convert logical->physical.
+#[tauri::command]
+fn get_dock_anchor(window: tauri::Window) -> Result<DockAnchor, String> {
+    let mon = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| window.primary_monitor().ok().flatten())
+        .ok_or_else(|| "no monitor available".to_string())?;
+    let wa = mon.work_area();
+    Ok(DockAnchor {
+        x: wa.position.x,
+        y: wa.position.y,
+        width: wa.size.width,
+        height: wa.size.height,
+        scale_factor: mon.scale_factor(),
+    })
+}
+
+/// Atomically reposition+resize the window to a physical rect in one Go so the
+/// right edge stays pinned without flicker between separate size/position calls.
+#[tauri::command]
+fn apply_dock_geometry(window: tauri::Window, x: i32, y: i32, width: u32, height: u32) -> Result<(), String> {
+    window
+        .set_size(tauri::PhysicalSize::new(width, height))
+        .map_err(|e| e.to_string())?;
+    window
+        .set_position(tauri::PhysicalPosition::new(x, y))
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Physical REST pose: a tall, very narrow strip flush to the work-area's right
+/// edge (exclusive of the Windows taskbar), vertically centered on it.
+fn rest_dock_geometry(anchor: &DockAnchor, rest_w_px: u32) -> (i32, i32, u32, u32) {
+    const EDGE_GAP_PX: i32 = 0;
+    let right_phys = anchor.x + anchor.width as i32 - EDGE_GAP_PX;
+    let x = right_phys - rest_w_px as i32;
+    // Centered vertically with a small top/bottom breathing gap.
+    let gap = 4_i32;
+    let y = anchor.y + gap;
+    let h = (anchor.height as i64 - 2 * gap as i64).max(0) as u32;
+    (x, y, rest_w_px, h)
 }
 
 #[tauri::command]
@@ -273,6 +331,7 @@ pub fn run() {
     .plugin(tauri_plugin_updater::Builder::new().build())
     .invoke_handler(tauri::generate_handler![
         save_todos, load_todos, save_settings, load_settings,
+        get_dock_anchor, apply_dock_geometry,
         get_git_commits, select_folder, open_url,
         open_path_in_explorer, open_path_in_editor,
         search::web_search,
@@ -297,6 +356,91 @@ pub fn run() {
       ));
       app.manage(update_state.clone());
       update::spawn_startup_check(app.handle().clone(), update_state);
+
+      // Desktop sticky-note window showing today's tasks, docked to the right edge
+      // of the work area. Created eager, then snapped to the REST pose immediately
+      // so it never flashes at the origin. Its frontend (StickyNote.vue) re-derives
+      // the same pose on mount and animates rest→fan→open via apply_dock_geometry.
+      const REST_W_PX: u32 = 8;
+      let sticky = tauri::WebviewWindowBuilder::new(
+        app,
+        "sticky",
+        tauri::WebviewUrl::App("sticky.html".into()),
+      )
+      .title("今日便签")
+      .inner_size(8.0, 600.0)
+      .resizable(false)
+      .decorations(false)
+      .always_on_top(true)
+      .transparent(true)
+      .shadow(false)
+      .skip_taskbar(true)
+      .focused(false)
+      .build()?;
+
+      if let Some(anchor) = sticky.current_monitor().ok().flatten() {
+        let wa = anchor.work_area();
+        let dock = DockAnchor {
+          x: wa.position.x,
+          y: wa.position.y,
+          width: wa.size.width,
+          height: wa.size.height,
+          scale_factor: anchor.scale_factor(),
+        };
+        let (x, y, w, h) = rest_dock_geometry(&dock, REST_W_PX);
+        let _ = sticky.set_position(tauri::PhysicalPosition::new(x, y));
+        let _ = sticky.set_size(tauri::PhysicalSize::new(w, h));
+      }
+
+      // System tray so the always-on-top, skip-taskbar dock stays reachable.
+      let menu = Menu::with_items(
+        app,
+        &[
+          &MenuItem::with_id(app, "toggle", "显示 / 隐藏 便签", true, None::<&str>)?,
+          &PredefinedMenuItem::separator(app)?,
+          &MenuItem::with_id(app, "quit", "退出 Todolist", true, None::<&str>)?,
+        ],
+      )?;
+      let tray_icon = app
+        .default_window_icon()
+        .cloned()
+        .expect("bundle icon should be set for the tray");
+      let _tray = TrayIconBuilder::with_id("sticky-tray")
+        .icon(tray_icon)
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id.as_ref() {
+          "toggle" => {
+            if let Some(w) = app.get_webview_window("sticky") {
+              if w.is_visible().unwrap_or(false) {
+                let _ = w.hide();
+              } else {
+                let _ = w.show();
+                let _ = w.set_focus();
+              }
+            }
+          }
+          "quit" => app.exit(0),
+          _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+          if let TrayIconEvent::Click {
+            button: MouseButton::Left,
+            button_state: MouseButtonState::Up,
+            ..
+          } = event
+          {
+            if let Some(w) = tray.app_handle().get_webview_window("sticky") {
+              if w.is_visible().unwrap_or(false) {
+                let _ = w.hide();
+              } else {
+                let _ = w.show();
+                let _ = w.set_focus();
+              }
+            }
+          }
+        })
+        .build(app)?;
 
       Ok(())
     })
