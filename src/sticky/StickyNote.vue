@@ -315,6 +315,14 @@ function openInApp(taskId?: string) {
   emit(EVENTS.jumpToTask, { taskId }).catch(() => {});
 }
 
+async function hideSticky() {
+  try {
+    await invoke('set_sticky_visible', { visible: false });
+  } catch (e) {
+    console.warn('Failed to hide sticky window:', e);
+  }
+}
+
 function handleGlobalKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     if (state.value === 'create' || state.value === 'open') {
@@ -426,12 +434,29 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <button class="dock-new-btn" title="新建便笺" @click="startCreate">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-      </button>
+      <div class="dock-actions">
+        <button
+          class="dock-new-btn"
+          :class="{ active: state === 'create' }"
+          title="新建便笺"
+          @click="startCreate"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+
+        <button
+          class="dock-hide-btn"
+          title="收起隐藏便签栏 (可在主窗口桌面便签按钮开启)"
+          @click="hideSticky"
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      </div>
     </aside>
 
     <!-- Note paper sheet: smoothly slides out and unfolds to the left of the dock column -->

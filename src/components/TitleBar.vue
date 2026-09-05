@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import { EVENTS } from '../events';
 
 defineProps<{
   title?: string;
 }>();
 
 const isMaximized = ref(false);
+const isStickyVisible = ref(true);
+let unlistenStickyVis: (() => void) | null = null;
 
 const minimizeWindow = () => getCurrentWindow().minimize();
 const toggleMaximize = async () => {
@@ -14,6 +19,15 @@ const toggleMaximize = async () => {
   isMaximized.value = await getCurrentWindow().isMaximized();
 };
 const closeWindow = () => getCurrentWindow().close();
+
+const toggleSticky = async () => {
+  try {
+    const nextVis = await invoke<boolean>('toggle_sticky_window');
+    isStickyVisible.value = nextVis;
+  } catch (e) {
+    console.warn('Failed to toggle sticky window:', e);
+  }
+};
 
 onMounted(async () => {
   try {
@@ -23,6 +37,31 @@ onMounted(async () => {
     });
   } catch (e) {
     console.error('Failed to get window state in TitleBar:', e);
+  }
+
+  try {
+    isStickyVisible.value = await invoke<boolean>('get_sticky_visible');
+  } catch (e) {
+    console.warn('Failed to get sticky visible status:', e);
+  }
+
+  try {
+    unlistenStickyVis = await listen<boolean>(
+      EVENTS.stickyVisibilityChanged,
+      (ev) => {
+        if (typeof ev.payload === 'boolean') {
+          isStickyVisible.value = ev.payload;
+        }
+      }
+    );
+  } catch (e) {
+    console.warn('Failed to listen sticky visibility changed:', e);
+  }
+});
+
+onUnmounted(() => {
+  if (unlistenStickyVis) {
+    unlistenStickyVis();
   }
 });
 </script>
@@ -40,6 +79,23 @@ onMounted(async () => {
 
     <!-- Right: Window Caption Buttons (Windows Native Style) -->
     <div class="titlebar-controls">
+      <!-- Desktop Sticky Toggle Button -->
+      <button
+        @click.stop="toggleSticky"
+        class="sticky-toggle-btn"
+        :class="{ active: isStickyVisible }"
+        :title="isStickyVisible ? '点击隐藏桌面悬浮便签栏' : '点击显示桌面悬浮便签栏'"
+        tabindex="-1"
+      >
+        <svg class="sticky-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="2" width="14" height="20" rx="3"></rect>
+          <line x1="9" y1="7" x2="15" y2="7"></line>
+          <line x1="9" y1="12" x2="15" y2="12"></line>
+        </svg>
+        <span class="sticky-btn-text">桌面便签</span>
+        <span class="sticky-dot" :class="{ on: isStickyVisible }"></span>
+      </button>
+
       <button @click.stop="minimizeWindow" class="win-btn" title="最小化" tabindex="-1">
         <svg width="10" height="10" viewBox="0 0 10 10">
           <line x1="0" y1="5" x2="10" y2="5" stroke="currentColor" stroke-width="1"></line>
@@ -63,6 +119,7 @@ onMounted(async () => {
     </div>
   </header>
 </template>
+
 
 <style scoped>
 .app-titlebar {
@@ -158,5 +215,77 @@ onMounted(async () => {
 .close-win-btn:active {
   background-color: #bf0f1d !important;
   color: #ffffff !important;
+}
+
+/* Sticky notes toggle button */
+.sticky-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  margin: auto 8px auto 0;
+  border-radius: 11px;
+  border: 1px solid var(--border-sticky-btn, rgba(0, 0, 0, 0.1));
+  background-color: var(--bg-sticky-btn, rgba(0, 0, 0, 0.03));
+  color: var(--text-titlebar, #475569);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.sticky-toggle-btn:hover {
+  background-color: var(--bg-sticky-btn-hover, rgba(0, 0, 0, 0.07));
+  color: #0f172a;
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+.sticky-toggle-btn.active {
+  background-color: rgba(16, 185, 129, 0.09);
+  color: #059669;
+  border-color: rgba(16, 185, 129, 0.32);
+}
+
+.sticky-toggle-btn.active:hover {
+  background-color: rgba(16, 185, 129, 0.16);
+  border-color: rgba(16, 185, 129, 0.45);
+}
+
+.sticky-btn-text {
+  line-height: 1;
+}
+
+.sticky-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #cbd5e1;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  flex-shrink: 0;
+}
+
+.sticky-dot.on {
+  background-color: #10b981;
+  box-shadow: 0 0 5px rgba(16, 185, 129, 0.55);
+}
+
+:global(.dark) .sticky-toggle-btn {
+  --border-sticky-btn: rgba(255, 255, 255, 0.12);
+  --bg-sticky-btn: rgba(255, 255, 255, 0.04);
+  --bg-sticky-btn-hover: rgba(255, 255, 255, 0.09);
+  color: #94a3b8;
+}
+
+:global(.dark) .sticky-toggle-btn:hover {
+  color: #f1f5f9;
+}
+
+:global(.dark) .sticky-toggle-btn.active {
+  background-color: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.4);
 }
 </style>

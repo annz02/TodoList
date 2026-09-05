@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
@@ -7,6 +7,7 @@ mod update;
 use update::UpdateState;
 
 mod search;
+
 
 
 #[cfg(target_os = "windows")]
@@ -96,6 +97,50 @@ fn rest_dock_geometry(anchor: &DockAnchor, rest_w_px: u32) -> (i32, i32, u32, u3
     let h = (anchor.height as i64 - 2 * gap as i64).max(0) as u32;
     (x, y, rest_w_px, h)
 }
+
+#[tauri::command]
+fn toggle_sticky_window(app: tauri::AppHandle) -> Result<bool, String> {
+    if let Some(w) = app.get_webview_window("sticky") {
+        let is_vis = w.is_visible().unwrap_or(false);
+        let next_vis = !is_vis;
+        if next_vis {
+            let _ = w.show();
+            let _ = w.set_focus();
+        } else {
+            let _ = w.hide();
+        }
+        let _ = app.emit("sticky-visibility-changed", next_vis);
+        Ok(next_vis)
+    } else {
+        Err("sticky window not found".into())
+    }
+}
+
+#[tauri::command]
+fn set_sticky_visible(app: tauri::AppHandle, visible: bool) -> Result<bool, String> {
+    if let Some(w) = app.get_webview_window("sticky") {
+        if visible {
+            let _ = w.show();
+            let _ = w.set_focus();
+        } else {
+            let _ = w.hide();
+        }
+        let _ = app.emit("sticky-visibility-changed", visible);
+        Ok(visible)
+    } else {
+        Err("sticky window not found".into())
+    }
+}
+
+#[tauri::command]
+fn get_sticky_visible(app: tauri::AppHandle) -> Result<bool, String> {
+    if let Some(w) = app.get_webview_window("sticky") {
+        Ok(w.is_visible().unwrap_or(false))
+    } else {
+        Ok(false)
+    }
+}
+
 
 #[tauri::command]
 fn get_git_commits(repo_path: String, date_str: String) -> Result<String, String> {
@@ -332,6 +377,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
         save_todos, load_todos, save_settings, load_settings,
         get_dock_anchor, apply_dock_geometry,
+        toggle_sticky_window, set_sticky_visible, get_sticky_visible,
         get_git_commits, select_folder, open_url,
         open_path_in_explorer, open_path_in_editor,
         search::web_search,
@@ -412,12 +458,15 @@ pub fn run() {
         .on_menu_event(|app, event| match event.id.as_ref() {
           "toggle" => {
             if let Some(w) = app.get_webview_window("sticky") {
-              if w.is_visible().unwrap_or(false) {
-                let _ = w.hide();
-              } else {
+              let is_vis = w.is_visible().unwrap_or(false);
+              let next_vis = !is_vis;
+              if next_vis {
                 let _ = w.show();
                 let _ = w.set_focus();
+              } else {
+                let _ = w.hide();
               }
+              let _ = app.emit("sticky-visibility-changed", next_vis);
             }
           }
           "quit" => app.exit(0),
@@ -431,12 +480,15 @@ pub fn run() {
           } = event
           {
             if let Some(w) = tray.app_handle().get_webview_window("sticky") {
-              if w.is_visible().unwrap_or(false) {
-                let _ = w.hide();
-              } else {
+              let is_vis = w.is_visible().unwrap_or(false);
+              let next_vis = !is_vis;
+              if next_vis {
                 let _ = w.show();
                 let _ = w.set_focus();
+              } else {
+                let _ = w.hide();
               }
+              let _ = tray.app_handle().emit("sticky-visibility-changed", next_vis);
             }
           }
         })

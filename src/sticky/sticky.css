@@ -202,32 +202,80 @@ body {
   background-color: #5c3528;
 }
 
-/* ---- Solid Circle-'+' new note button ------------------------------------ */
+/* ---- Action bar below tabs ------------------------------------------------ */
+.dock-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+  margin-top: 6px;
+  width: 100%;
+}
+
+/* ---- Solid Bookmark-'+' new note button ---------------------------------- */
 .dock-new-btn {
   appearance: none;
-  width: 26px;
-  height: 26px;
-  min-height: 26px;
-  margin: 6px 4px 2px auto;
-  border-radius: 50%;
+  width: 32px;
+  height: 30px;
+  min-height: 30px;
+  margin: 0;
+  border-radius: 15px 0 0 15px;
   border: none;
-  background-color: #744535;
+  background-color: #704739;
   color: #ffffff;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
-  transition: opacity 0.15s ease, transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: -2px 2px 6px rgba(0, 0, 0, 0.18);
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.16s ease, box-shadow 0.16s ease;
   z-index: 6;
 }
 
 .dock-new-btn:hover {
-  background-color: #5c3528;
-  transform: scale(1.12);
-  box-shadow: 0 3px 9px rgba(0, 0, 0, 0.3);
+  background-color: #583529;
+  transform: translateX(-4px);
+  box-shadow: -3px 3px 10px rgba(0, 0, 0, 0.28);
 }
+
+.dock-new-btn.active {
+  background-color: #48271d;
+  transform: translateX(-4px);
+  box-shadow: -3px 3px 10px rgba(0, 0, 0, 0.35);
+}
+
+/* ---- Mini Hide / Collapse Button ----------------------------------------- */
+.dock-hide-btn {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  margin: 0 4px 0 auto;
+  border-radius: 50%;
+  border: 1px solid rgba(112, 71, 57, 0.25);
+  background-color: rgba(255, 255, 255, 0.75);
+  color: #704739;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.16s ease;
+  z-index: 6;
+  opacity: 0.75;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.dock-hide-btn:hover {
+  opacity: 1;
+  background-color: #704739;
+  color: #ffffff;
+  border-color: #704739;
+  transform: scale(1.12);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+}
+
 
 /* =========================================================================
    Note sheet (open / create only): Sits to the left of the dock tab column.

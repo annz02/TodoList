@@ -16,8 +16,8 @@ export const TAB_H = 92;
 export const TAB_OVERLAP = 10;
 /** Height of the overflow badge pill (+N). */
 export const OVERFLOW_BADGE_H = 28;
-/** Height carved out at the bottom of the column for the circle-'+' plus vertical padding buffer. */
-export const PLUS_ZONE_H = 50;
+/** Height carved out at the bottom of the column for the new note + hide action buttons. */
+export const PLUS_ZONE_H = 68;
 /** Vertical top/bottom padding buffer for the dock column. */
 export const DOCK_PAD_V = 16;
 /** Maximum visible tabs shown in the idle dock strip. */
