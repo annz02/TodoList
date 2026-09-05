@@ -202,60 +202,86 @@ body {
   background-color: #5c3528;
 }
 
+/* ---- Collapsed state edge handle (stays on right screen edge) ------------- */
+.dock-collapsed-tab {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 18px;
+  height: 68px;
+  border-radius: 9px 0 0 9px;
+  background: linear-gradient(180deg, #744535 0%, #5d3425 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: -2px 2px 8px rgba(0, 0, 0, 0.22);
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), background 0.16s ease, box-shadow 0.16s ease;
+  user-select: none;
+  z-index: 100;
+}
+
+.dock-collapsed-tab:hover {
+  transform: translateX(-3px);
+  background: linear-gradient(180deg, #85503f 0%, #6d3d2e 100%);
+  box-shadow: -3px 3px 12px rgba(0, 0, 0, 0.32);
+}
+
 /* ---- Action bar below tabs ------------------------------------------------ */
 .dock-actions {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 7px;
-  margin-top: 6px;
+  gap: 8px;
+  margin-top: 8px;
   width: 100%;
 }
 
-/* ---- Solid Bookmark-'+' new note button ---------------------------------- */
+/* ---- Solid circular new note button --------------------------------------- */
 .dock-new-btn {
   appearance: none;
-  width: 32px;
+  width: 30px;
   height: 30px;
   min-height: 30px;
-  margin: 0;
-  border-radius: 15px 0 0 15px;
+  margin: 0 4px 0 auto;
+  border-radius: 50%;
   border: none;
-  background-color: #704739;
+  background: linear-gradient(135deg, #744535 0%, #5d3425 100%);
   color: #ffffff;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: -2px 2px 6px rgba(0, 0, 0, 0.18);
-  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.16s ease, box-shadow 0.16s ease;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.2);
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.16s ease, filter 0.16s ease;
   z-index: 6;
 }
 
 .dock-new-btn:hover {
-  background-color: #583529;
-  transform: translateX(-4px);
-  box-shadow: -3px 3px 10px rgba(0, 0, 0, 0.28);
+  filter: brightness(1.12);
+  transform: scale(1.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
 }
 
 .dock-new-btn.active {
-  background-color: #48271d;
-  transform: translateX(-4px);
-  box-shadow: -3px 3px 10px rgba(0, 0, 0, 0.35);
+  filter: brightness(1.2);
+  transform: scale(1.12);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
-/* ---- Mini Hide / Collapse Button ----------------------------------------- */
-.dock-hide-btn {
+/* ---- Refined collapse / hide button -------------------------------------- */
+.dock-collapse-btn {
   appearance: none;
-  width: 22px;
-  height: 22px;
-  min-height: 22px;
-  margin: 0 4px 0 auto;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  margin: 0 7px 0 auto;
   border-radius: 50%;
-  border: 1px solid rgba(112, 71, 57, 0.25);
-  background-color: rgba(255, 255, 255, 0.75);
-  color: #704739;
+  border: 1px solid rgba(116, 69, 53, 0.22);
+  background-color: rgba(255, 255, 255, 0.88);
+  color: #744535;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -263,18 +289,17 @@ body {
   flex-shrink: 0;
   transition: all 0.16s ease;
   z-index: 6;
-  opacity: 0.75;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.dock-hide-btn:hover {
-  opacity: 1;
-  background-color: #704739;
+.dock-collapse-btn:hover {
+  background-color: #744535;
   color: #ffffff;
-  border-color: #704739;
+  border-color: #744535;
   transform: scale(1.12);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.22);
 }
+
 
 
 /* =========================================================================

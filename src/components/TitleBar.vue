@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen, emit } from '@tauri-apps/api/event';
 import { EVENTS } from '../events';
 
 defineProps<{
@@ -22,12 +22,17 @@ const closeWindow = () => getCurrentWindow().close();
 
 const toggleSticky = async () => {
   try {
-    const nextVis = await invoke<boolean>('toggle_sticky_window');
-    isStickyVisible.value = nextVis;
+    const isVis = await invoke<boolean>('get_sticky_visible');
+    if (!isVis) {
+      await invoke('set_sticky_visible', { visible: true });
+      isStickyVisible.value = true;
+    }
+    await emit('toggle-sticky-state');
   } catch (e) {
     console.warn('Failed to toggle sticky window:', e);
   }
 };
+
 
 onMounted(async () => {
   try {

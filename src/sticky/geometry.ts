@@ -1,10 +1,12 @@
-export type DockState = 'idle' | 'open' | 'create';
+export type DockState = 'collapsed' | 'idle' | 'open' | 'create';
 
 /** Physical gap (px) between the dock's right edge and the work area's right edge. */
 export const EDGE_GAP_PX = 0;
-/**
- * Logical width of the always-visible bookmark tab column.
- */
+/** Logical width of the collapsed edge handle tab. */
+export const COLLAPSED_W = 18;
+/** Logical height of the collapsed edge handle tab. */
+export const COLLAPSED_H = 68;
+/** Logical width of the always-visible bookmark tab column in idle. */
 export const DOCK_COL_W = 46;
 /** Logical reserved width of the note sheet next to the tab column in open/create. */
 export const NOTE_W = 380;
@@ -16,8 +18,8 @@ export const TAB_H = 92;
 export const TAB_OVERLAP = 10;
 /** Height of the overflow badge pill (+N). */
 export const OVERFLOW_BADGE_H = 28;
-/** Height carved out at the bottom of the column for the new note + hide action buttons. */
-export const PLUS_ZONE_H = 68;
+/** Height carved out at the bottom of the column for the new note + collapse action buttons. */
+export const PLUS_ZONE_H = 72;
 /** Vertical top/bottom padding buffer for the dock column. */
 export const DOCK_PAD_V = 16;
 /** Maximum visible tabs shown in the idle dock strip. */
@@ -43,10 +45,13 @@ export interface DockRectP {
 }
 
 /**
- * Logical window height: collapsed/idle hugs the bookmark-tab stack; open/create
- * use a fixed note-sheet height independent of tab count.
+ * Logical window height: collapsed hugs the mini handle tab; idle hugs the bookmark-tab stack;
+ * open/create use a fixed note-sheet height independent of tab count.
  */
 export function dockHeightFor(state: DockState, nRows: number, workAreaLogicalH: number, activeIdx: number = 0): number {
+  if (state === 'collapsed') {
+    return COLLAPSED_H;
+  }
   const maxBody = workAreaLogicalH - 2 * 8;
   const visible = Math.min(nRows, MAX_VISIBLE_TABS);
   const stackH =
@@ -77,12 +82,14 @@ export function dockLayout(anchor: DockAnchor, state: DockState, nRows: number, 
   const loW = anchor.width / s;
   const loH = anchor.height / s;
 
-  // Logical width by state: idle keeps just the color column; open/create add a sheet
+  // Logical width by state: collapsed keeps just the 18px edge handle, idle keeps color column; open/create add a sheet
   // for the note card on the left of that column.
   const wLog =
-    state === 'idle'
+    state === 'collapsed'
+      ? COLLAPSED_W
+      : state === 'idle'
       ? DOCK_COL_W
-      : Math.min(DOCK_COL_W + NOTE_W, loW); // sheet + dock column
+      : Math.min(DOCK_COL_W + NOTE_W, loW);
 
   // Logical height by state.
   const hLog = dockHeightFor(state, nRows, loH, activeIdx);
@@ -92,7 +99,10 @@ export function dockLayout(anchor: DockAnchor, state: DockState, nRows: number, 
   const idleHLog = dockHeightFor('idle', nRows, loH);
   const cyLog = loY + loH / 2;
   const idleHP = Math.max(1, Math.round(idleHLog * s));
-  const yP = Math.max(Math.round(loY * s), Math.round(cyLog * s - idleHP / 2));
+  const yP =
+    state === 'collapsed'
+      ? Math.max(Math.round(loY * s), Math.round(cyLog * s - Math.round(COLLAPSED_H * s) / 2))
+      : Math.max(Math.round(loY * s), Math.round(cyLog * s - idleHP / 2));
   const hP = Math.max(1, Math.round(hLog * s));
 
   // Physical right edge pinned; left edge follows width.
@@ -102,3 +112,4 @@ export function dockLayout(anchor: DockAnchor, state: DockState, nRows: number, 
 
   return { xP, yP, wP, hP, rightPhys };
 }
+

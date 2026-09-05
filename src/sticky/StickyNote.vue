@@ -315,12 +315,12 @@ function openInApp(taskId?: string) {
   emit(EVENTS.jumpToTask, { taskId }).catch(() => {});
 }
 
-async function hideSticky() {
-  try {
-    await invoke('set_sticky_visible', { visible: false });
-  } catch (e) {
-    console.warn('Failed to hide sticky window:', e);
-  }
+function collapseDock() {
+  transition('collapsed');
+}
+
+function expandDock() {
+  transition('idle');
 }
 
 function handleGlobalKeydown(e: KeyboardEvent) {
@@ -346,36 +346,36 @@ const loadFromDisk = async (first = false) => {
   pokeClock();
   try {
     const data: string = await invoke('load_todos');
-    todos.value = JSON.parse(Array.isArray(data) ? JSON.stringify(data) : data || '[]');
-  } catch (e) {
-    console.error('Failed to load todos:', e);
-    todos.value = [];
-  } finally {
-    loading.value = false;
-  }
-  if (rows.value.length === 0) {
-    if (state.value === 'open') {
+    const parsed: Todo[] = JSON.parse(data);
+    todos.value = parsed;
+
+    if (activeId.value && !parsed.some((t) => t.id === activeId.value)) {
       activeId.value = null;
-      transition('idle');
+      if (state.value === 'open') {
+        transition('idle');
+      }
     }
-  } else if (state.value === 'open' && activeId.value && !rows.value.some((r) => r.id === activeId.value)) {
-    activeId.value = null;
-    transition('idle');
+  } catch (e) {
+    console.error('Failed to load todos from disk in sticky:', e);
+  } finally {
+    if (first) {
+      loading.value = false;
+      await snapIdle();
+    }
   }
-  void first;
 };
+
+let unlistenToggle: (() => void) | undefined;
 
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
 onMounted(async () => {
-  await initTheme();
+  initTheme();
   isDark.value = document.documentElement.classList.contains('dark');
-  await refreshAnchor();
-  await loadFromDisk(true);
-  await snapIdle();
-
   window.addEventListener('keydown', handleGlobalKeydown);
+
+  await loadFromDisk(true);
 
   try {
     unlistenTodos = await listen<TodosChangedPayload>(
@@ -389,6 +389,18 @@ onMounted(async () => {
   } catch (e) {
     console.warn('Failed to listen todos-changed:', e);
   }
+
+  try {
+    unlistenToggle = await listen('toggle-sticky-state', () => {
+      if (state.value === 'collapsed') {
+        expandDock();
+      } else {
+        collapseDock();
+      }
+    });
+  } catch (e) {
+    console.warn('Failed to listen toggle-sticky-state:', e);
+  }
 });
 
 onUnmounted(() => {
@@ -397,6 +409,7 @@ onUnmounted(() => {
   if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
   if (raf) cancelAnimationFrame(raf);
   if (unlistenTodos) unlistenTodos();
+  if (unlistenToggle) unlistenToggle();
 });
 </script>
 
@@ -408,9 +421,20 @@ onUnmounted(() => {
     @pointermove="handlePointerMove"
     @pointerleave="handlePointerLeave"
   >
-    <!-- Always-on bookmark tab column pinned to the far-right edge. Each tab = one
-         today task bookmark with vertical title text; bottom circle-'+' opens a new note. -->
-    <aside class="dock-col">
+    <!-- Collapsed edge handle: stays visible on the right screen edge when collapsed -->
+    <div
+      v-if="state === 'collapsed'"
+      class="dock-collapsed-tab"
+      title="展开便签栏"
+      @click="expandDock"
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </div>
+
+    <!-- Always-on bookmark tab column pinned to the far-right edge -->
+    <aside v-else class="dock-col">
       <div class="dock-list">
         <button
           v-for="t in visibleRows"
@@ -435,24 +459,26 @@ onUnmounted(() => {
       </div>
 
       <div class="dock-actions">
+        <!-- Solid circular new-note button -->
         <button
           class="dock-new-btn"
           :class="{ active: state === 'create' }"
           title="新建便笺"
           @click="startCreate"
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
         </button>
 
+        <!-- Refined collapse button -->
         <button
-          class="dock-hide-btn"
-          title="收起隐藏便签栏 (可在主窗口桌面便签按钮开启)"
-          @click="hideSticky"
+          class="dock-collapse-btn"
+          title="收起便签栏 (保留边缘展开条)"
+          @click="collapseDock"
         >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
         </button>
