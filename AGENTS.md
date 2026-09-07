@@ -2,9 +2,10 @@
 
 Guidance for AI coding agents and contributors working in this repository.
 
-## Git commit convention
+## Git commits
 
-All commit messages MUST follow the **Angular Commit Convention** (Conventional Commits spec):
+- **No automatic commits**: Do NOT commit changes unless the user explicitly asks or instructs you to commit code.
+- All commit messages MUST follow the **Angular Commit Convention** (Conventional Commits spec):
 
 ```
 <type>(<scope>): <subject>
